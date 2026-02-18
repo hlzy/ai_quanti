@@ -1,0 +1,701 @@
+{% extends "base.html" %}
+
+{% block title %}持仓管理 - AI量化工具{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .summary-card.green {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    .summary-card.red {
+        background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+    }
+
+    .summary-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+
+    .summary-value {
+        font-size: 2rem;
+        font-weight: 600;
+    }
+
+    .positions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(900px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .position-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+
+    .position-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .position-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+    }
+
+    .position-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .info-item {
+        padding: 0.75rem;
+        background: #f5f7fa;
+        border-radius: 8px;
+    }
+
+    .info-label {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .profit-positive {
+        color: #67c23a !important;
+    }
+
+    .profit-negative {
+        color: #f56c6c !important;
+    }
+
+    .kline-container {
+        margin-top: 1rem;
+    }
+
+    .kline-controls {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .kline-controls button {
+        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .kline-controls button.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+
+    .kline-controls button:hover {
+        border-color: #667eea;
+    }
+
+    .chart-box {
+        width: 100%;
+        height: 300px;
+        border: 1px solid #e4e7ed;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-footer {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 1.5rem;
+    }
+
+    .btn-group {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #909399;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="summary-cards" id="summaryCards">
+    <div class="summary-card">
+        <div class="summary-label">💰 现金余额</div>
+        <div class="summary-value" id="cashBalance">-</div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-label">📊 持仓市值</div>
+        <div class="summary-value" id="marketValue">-</div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-label">💼 总资产</div>
+        <div class="summary-value" id="totalAssets">-</div>
+    </div>
+    <div class="summary-card" id="profitCard">
+        <div class="summary-label">📈 总盈亏</div>
+        <div class="summary-value" id="totalProfit">-</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">持仓列表</div>
+    
+    <div class="btn-group">
+        <button class="btn btn-primary" onclick="showAddPositionModal()">➕ 添加持仓</button>
+        <button class="btn btn-primary" onclick="showUpdateCashModal()">💰 设置现金</button>
+        <button class="btn btn-success" onclick="updateAllPrices()">🔄 更新价格</button>
+    </div>
+
+    <div id="positionsContainer">
+        <div class="loading">加载中</div>
+    </div>
+</div>
+
+<!-- 添加持仓弹窗 -->
+<div class="modal" id="addPositionModal">
+    <div class="modal-content">
+        <div class="modal-header">添加/更新持仓</div>
+        <form id="positionForm">
+            <div class="input-group">
+                <label>股票代码 *</label>
+                <input type="text" id="stockCode" required placeholder="例如: 000001.SZ" />
+            </div>
+            <div class="input-group">
+                <label>股票名称 *</label>
+                <input type="text" id="stockName" required placeholder="例如: 平安银行" />
+            </div>
+            <div class="input-group">
+                <label>持仓数量 *</label>
+                <input type="number" id="quantity" required min="1" placeholder="股数" />
+            </div>
+            <div class="input-group">
+                <label>成本价 *</label>
+                <input type="number" id="costPrice" required min="0" step="0.01" placeholder="元" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeModal('addPositionModal')">取消</button>
+                <button type="submit" class="btn btn-primary">确定</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 设置现金弹窗 -->
+<div class="modal" id="updateCashModal">
+    <div class="modal-content">
+        <div class="modal-header">设置现金余额</div>
+        <form id="cashForm">
+            <div class="input-group">
+                <label>现金余额 *</label>
+                <input type="number" id="cashInput" required min="0" step="0.01" placeholder="元" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeModal('updateCashModal')">取消</button>
+                <button type="submit" class="btn btn-primary">确定</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// 加载投资组合数据
+async function loadPortfolio() {
+    try {
+        const response = await fetch('/api/positions');
+        const result = await response.json();
+        
+        if (result.success) {
+            updateSummary(result.data);
+            displayPositions(result.data.positions);
+        }
+    } catch (error) {
+        console.error('加载数据失败:', error);
+    }
+}
+
+// 更新汇总信息
+function updateSummary(data) {
+    document.getElementById('cashBalance').textContent = '¥' + formatNumber(data.cash);
+    document.getElementById('marketValue').textContent = '¥' + formatNumber(data.total_market_value);
+    document.getElementById('totalAssets').textContent = '¥' + formatNumber(data.total_assets);
+    
+    const profitValue = data.total_profit_loss;
+    const profitCard = document.getElementById('profitCard');
+    
+    if (profitValue > 0) {
+        profitCard.className = 'summary-card green';
+        document.getElementById('totalProfit').textContent = '+¥' + formatNumber(profitValue);
+    } else if (profitValue < 0) {
+        profitCard.className = 'summary-card red';
+        document.getElementById('totalProfit').textContent = '¥' + formatNumber(profitValue);
+    } else {
+        profitCard.className = 'summary-card';
+        document.getElementById('totalProfit').textContent = '¥0.00';
+    }
+}
+
+// 显示持仓列表
+function displayPositions(positions) {
+    const container = document.getElementById('positionsContainer');
+    
+    if (positions.length === 0) {
+        container.innerHTML = '<div class="empty-state">暂无持仓数据<br>点击"添加持仓"开始记录</div>';
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="positions-grid">
+            ${positions.map(pos => {
+                const profitClass = pos.profit_loss > 0 ? 'profit-positive' : pos.profit_loss < 0 ? 'profit-negative' : '';
+                const profitSign = pos.profit_loss > 0 ? '+' : '';
+                return `
+                    <div class="position-card">
+                        <div class="position-header">
+                            <div class="position-title">${pos.stock_code} - ${pos.stock_name || '-'}</div>
+                            <button class="btn btn-danger" onclick="deletePosition('${pos.stock_code}')" style="font-size: 0.85rem; padding: 0.5rem 1rem;">删除</button>
+                        </div>
+                        
+                        <div class="position-info">
+                            <div class="info-item">
+                                <div class="info-label">持仓数量</div>
+                                <div class="info-value">${pos.quantity}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">成本价</div>
+                                <div class="info-value">¥${formatNumber(pos.cost_price)}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">当前价</div>
+                                <div class="info-value">¥${formatNumber(pos.current_price || pos.cost_price)}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">盈亏金额</div>
+                                <div class="info-value ${profitClass}">${pos.profit_loss ? profitSign + '¥' + formatNumber(pos.profit_loss) : '-'}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">盈亏比例</div>
+                                <div class="info-value ${profitClass}">${pos.profit_loss_pct ? profitSign + formatNumber(pos.profit_loss_pct) + '%' : '-'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="kline-container">
+                            <div class="kline-controls">
+                                <button class="active" onclick="switchPeriod('${pos.stock_code}', 'minute', this)">1分钟K</button>
+                                <button onclick="switchPeriod('${pos.stock_code}', 'daily', this)">日K</button>
+                                <button onclick="switchPeriod('${pos.stock_code}', 'weekly', this)">周K</button>
+                                <button onclick="updateStockData('${pos.stock_code}')" style="margin-left: auto;">🔄 更新数据</button>
+                            </div>
+                            <div id="chart_${pos.stock_code}" class="chart-box"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+    
+    // 加载所有持仓的K线图
+    positions.forEach(pos => {
+        loadKlineChart(pos.stock_code, 'minute');
+    });
+}
+
+// 显示添加持仓弹窗
+function showAddPositionModal() {
+    document.getElementById('positionForm').reset();
+    document.getElementById('addPositionModal').classList.add('active');
+}
+
+// 显示设置现金弹窗
+async function showUpdateCashModal() {
+    try {
+        const response = await fetch('/api/cash');
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById('cashInput').value = result.data.balance;
+        }
+    } catch (error) {
+        console.error('获取现金余额失败:', error);
+    }
+    document.getElementById('updateCashModal').classList.add('active');
+}
+
+// 关闭弹窗
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+}
+
+// 添加持仓表单提交
+document.getElementById('positionForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const data = {
+        stock_code: document.getElementById('stockCode').value.trim(),
+        stock_name: document.getElementById('stockName').value.trim(),
+        quantity: parseInt(document.getElementById('quantity').value),
+        cost_price: parseFloat(document.getElementById('costPrice').value)
+    };
+    
+    try {
+        const response = await fetch('/api/positions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showMessage('操作成功');
+            closeModal('addPositionModal');
+            loadPortfolio();
+        } else {
+            showMessage(result.message, 'error');
+        }
+    } catch (error) {
+        showMessage('操作失败: ' + error.message, 'error');
+    }
+});
+
+// 设置现金表单提交
+document.getElementById('cashForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const balance = parseFloat(document.getElementById('cashInput').value);
+    
+    try {
+        const response = await fetch('/api/cash', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ balance })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showMessage('现金余额更新成功');
+            closeModal('updateCashModal');
+            loadPortfolio();
+        } else {
+            showMessage(result.message, 'error');
+        }
+    } catch (error) {
+        showMessage('更新失败: ' + error.message, 'error');
+    }
+});
+
+// 删除持仓
+async function deletePosition(stockCode) {
+    if (!confirm(`确定要删除 ${stockCode} 的持仓吗？`)) return;
+    
+    try {
+        const response = await fetch(`/api/positions/${stockCode}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showMessage('删除成功');
+            loadPortfolio();
+        } else {
+            showMessage(result.message, 'error');
+        }
+    } catch (error) {
+        showMessage('删除失败: ' + error.message, 'error');
+    }
+}
+
+// 更新所有持仓价格
+async function updateAllPrices() {
+    try {
+        const response = await fetch('/api/positions/update-prices', {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showMessage('价格更新成功');
+            loadPortfolio();
+        } else {
+            showMessage(result.message, 'error');
+        }
+    } catch (error) {
+        showMessage('更新失败: ' + error.message, 'error');
+    }
+}
+
+// 点击弹窗外部关闭
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('active');
+        }
+    });
+});
+
+// K线图相关功能
+let chartInstances = {};
+
+// 切换周期
+async function switchPeriod(stockCode, period, button) {
+    // 更新按钮状态
+    const container = button.parentElement;
+    container.querySelectorAll('button').forEach(btn => {
+        if (btn !== button && !btn.textContent.includes('更新')) {
+            btn.classList.remove('active');
+        }
+    });
+    button.classList.add('active');
+    
+    // 加载数据
+    await loadKlineChart(stockCode, period);
+}
+
+// 加载K线图
+async function loadKlineChart(stockCode, period = 'minute') {
+    const chartId = `chart_${stockCode}`;
+    const chartDom = document.getElementById(chartId);
+    
+    if (!chartDom) return;
+    
+    try {
+        // 获取天数
+        let days = 2;
+        if (period === 'daily') days = 60;
+        if (period === 'weekly') days = 360;
+        
+        // 获取数据
+        const response = await fetch(`/api/stock/data/${stockCode}?period=${period}&days=${days}`);
+        const result = await response.json();
+        
+        if (!result.success || !result.data || result.data.length === 0) {
+            chartDom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">暂无数据</div>';
+            return;
+        }
+        
+        renderKlineChart(chartId, result.data, stockCode, period);
+    } catch (error) {
+        console.error('加载K线图失败:', error);
+        chartDom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#f56c6c;">加载失败</div>';
+    }
+}
+
+// 渲染K线图
+function renderKlineChart(chartId, data, stockCode, period) {
+    const chartDom = document.getElementById(chartId);
+    if (!chartDom) return;
+    
+    // 销毁旧图表
+    if (chartInstances[chartId]) {
+        chartInstances[chartId].dispose();
+    }
+    
+    // 创建新图表
+    const chart = echarts.init(chartDom);
+    chartInstances[chartId] = chart;
+    
+    // 准备数据
+    const dates = data.map(item => item.trade_date || item.trade_time);
+    const values = data.map(item => [item.open, item.close, item.low, item.high]);
+    
+    const option = {
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+                type: 'cross'
+            },
+            formatter: function(params) {
+                const item = data[params[0].dataIndex];
+                return `
+                    ${item.trade_date || item.trade_time}<br/>
+                    开: ${item.open}<br/>
+                    收: ${item.close}<br/>
+                    低: ${item.low}<br/>
+                    高: ${item.high}<br/>
+                    量: ${(item.volume / 10000).toFixed(2)}万
+                `;
+            }
+        },
+        grid: {
+            left: '3%',
+            right: '3%',
+            bottom: '10%',
+            top: '5%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            axisLabel: {
+                fontSize: 10,
+                interval: Math.floor(dates.length / 8)
+            }
+        },
+        yAxis: {
+            type: 'value',
+            scale: true,
+            splitLine: {
+                lineStyle: {
+                    type: 'dashed'
+                }
+            }
+        },
+        dataZoom: [
+            {
+                type: 'inside',
+                start: 0,
+                end: 100
+            }
+        ],
+        series: [
+            {
+                type: 'candlestick',
+                data: values,
+                itemStyle: {
+                    color: '#ef5350',
+                    color0: '#26a69a',
+                    borderColor: '#ef5350',
+                    borderColor0: '#26a69a'
+                }
+            }
+        ]
+    };
+    
+    chart.setOption(option);
+    
+    // 键盘事件
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const currentOption = chart.getOption();
+            const currentZoom = currentOption.dataZoom[0];
+            const range = currentZoom.end - currentZoom.start;
+            const newRange = Math.max(10, range * 0.8);
+            const center = (currentZoom.start + currentZoom.end) / 2;
+            chart.setOption({
+                dataZoom: [{
+                    start: Math.max(0, center - newRange / 2),
+                    end: Math.min(100, center + newRange / 2)
+                }]
+            });
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const currentOption = chart.getOption();
+            const currentZoom = currentOption.dataZoom[0];
+            const range = currentZoom.end - currentZoom.start;
+            const newRange = Math.min(100, range * 1.2);
+            const center = (currentZoom.start + currentZoom.end) / 2;
+            chart.setOption({
+                dataZoom: [{
+                    start: Math.max(0, center - newRange / 2),
+                    end: Math.min(100, center + newRange / 2)
+                }]
+            });
+        }
+    });
+    
+    // 响应式
+    window.addEventListener('resize', () => chart.resize());
+}
+
+// 更新股票数据
+async function updateStockData(stockCode) {
+    try {
+        const response = await fetch(`/api/stock/update/${stockCode}`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showMessage('数据更新成功');
+            // 重新加载当前活跃的图表
+            const container = document.querySelector(`#chart_${stockCode}`).previousElementSibling;
+            const activeButton = container.querySelector('button.active');
+            const period = activeButton.textContent.includes('分钟') ? 'minute' : 
+                          activeButton.textContent.includes('日') ? 'daily' : 'weekly';
+            await loadKlineChart(stockCode, period);
+        } else {
+            showMessage(result.message, 'error');
+        }
+    } catch (error) {
+        showMessage('更新失败: ' + error.message, 'error');
+    }
+}
+
+// 页面加载完成
+document.addEventListener('DOMContentLoaded', () => {
+    loadPortfolio();
+});
+</script>
+{% endblock %}

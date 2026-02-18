@@ -1,0 +1,628 @@
+{% extends "base.html" %}
+
+{% block title %}数据库浏览 - AI量化股票分析工具{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
+    .tables-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .table-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: all 0.3s;
+        border: 2px solid transparent;
+    }
+
+    .table-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        border-color: #667eea;
+    }
+
+    .table-card.active {
+        border-color: #667eea;
+        background: #f0f4ff;
+    }
+
+    .table-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        color: #333;
+    }
+
+    .table-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    .data-view {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .table-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .table-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .pagination {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .pagination button {
+        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .pagination button:hover:not(:disabled) {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+
+    .pagination button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .pagination-info {
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow-x: auto;
+        display: block;
+    }
+
+    .data-table thead {
+        background: #f5f7fa;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+        white-space: nowrap;
+    }
+
+    .data-table th {
+        font-weight: 600;
+        color: #333;
+        position: sticky;
+        top: 0;
+        background: #f5f7fa;
+    }
+
+    .data-table tr:hover {
+        background: #f9f9f9;
+    }
+
+    .structure-view {
+        background: #f9f9f9;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+
+    .structure-item {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        background: white;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .field-name {
+        font-weight: 600;
+        color: #667eea;
+    }
+
+    .field-type {
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .query-editor {
+        margin-top: 1rem;
+    }
+
+    .query-editor textarea {
+        width: 100%;
+        min-height: 120px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        resize: vertical;
+    }
+
+    .query-controls {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #999;
+    }
+
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .tab {
+        padding: 0.75rem 1.5rem;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1rem;
+        color: #666;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.3s;
+    }
+
+    .tab.active {
+        color: #667eea;
+        border-bottom-color: #667eea;
+        font-weight: 600;
+    }
+
+    .tab:hover {
+        color: #667eea;
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 数据库统计 -->
+<div class="stats-grid" id="statsContainer">
+    <div class="stat-card">
+        <div class="stat-value" id="totalTables">-</div>
+        <div class="stat-label">数据表数量</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="totalRows">-</div>
+        <div class="stat-label">总记录数</div>
+    </div>
+</div>
+
+<!-- 表列表 -->
+<div class="card">
+    <div class="card-header">📊 数据表</div>
+    <div class="tables-grid" id="tablesGrid"></div>
+</div>
+
+<!-- 数据查看区域 -->
+<div class="data-view" id="dataView" style="display: none;">
+    <div class="table-controls">
+        <h3 class="table-title" id="currentTableName"></h3>
+    </div>
+
+    <!-- 选项卡 -->
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('data')">数据</button>
+        <button class="tab" onclick="switchTab('structure')">结构</button>
+        <button class="tab" onclick="switchTab('query')">自定义查询</button>
+    </div>
+
+    <!-- 数据选项卡 -->
+    <div class="tab-content active" id="dataTab">
+        <div class="pagination" style="margin-bottom: 1rem;">
+            <button onclick="previousPage()">上一页</button>
+            <span class="pagination-info" id="paginationInfo"></span>
+            <button onclick="nextPage()">下一页</button>
+            <select id="limitSelect" onchange="changeLimit()" style="padding: 0.5rem; border-radius: 5px; border: 1px solid #ddd;">
+                <option value="10">10条/页</option>
+                <option value="50">50条/页</option>
+                <option value="100" selected>100条/页</option>
+                <option value="500">500条/页</option>
+            </select>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead id="dataTableHead"></thead>
+                <tbody id="dataTableBody"></tbody>
+            </table>
+        </div>
+        <div class="pagination" style="margin-top: 1rem;">
+            <button onclick="previousPage()">上一页</button>
+            <span class="pagination-info" id="paginationInfo2"></span>
+            <button onclick="nextPage()">下一页</button>
+        </div>
+    </div>
+
+    <!-- 结构选项卡 -->
+    <div class="tab-content" id="structureTab">
+        <div class="structure-view" id="structureView"></div>
+    </div>
+
+    <!-- 自定义查询选项卡 -->
+    <div class="tab-content" id="queryTab">
+        <div class="query-editor">
+            <textarea id="customQuery" placeholder="输入SQL查询语句（仅支持SELECT）&#10;示例：SELECT * FROM watchlist WHERE stock_code LIKE '6%' LIMIT 10"></textarea>
+            <div class="query-controls">
+                <button class="btn btn-primary" onclick="executeCustomQuery()">执行查询</button>
+                <button class="btn" onclick="clearQuery()">清空</button>
+            </div>
+        </div>
+        <div id="queryResult" style="margin-top: 1.5rem;"></div>
+    </div>
+</div>
+
+<script>
+    let currentTable = null;
+    let currentPage = 0;
+    let currentLimit = 100;
+    let totalRecords = 0;
+    let allTables = [];
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDatabaseStats();
+        loadTables();
+    });
+
+    // 加载数据库统计
+    async function loadDatabaseStats() {
+        try {
+            const response = await fetch('/api/database/stats');
+            const result = await response.json();
+            
+            if (result.success) {
+                document.getElementById('totalTables').textContent = result.data.total_tables;
+                document.getElementById('totalRows').textContent = result.data.total_rows.toLocaleString();
+            }
+        } catch (error) {
+            console.error('加载统计信息失败:', error);
+        }
+    }
+
+    // 加载所有表
+    async function loadTables() {
+        try {
+            const response = await fetch('/api/database/tables');
+            const result = await response.json();
+            
+            if (result.success) {
+                allTables = result.data;
+                renderTables(result.data);
+            } else {
+                showMessage(result.message, 'error');
+            }
+        } catch (error) {
+            console.error('加载表列表失败:', error);
+            showMessage('加载失败', 'error');
+        }
+    }
+
+    // 渲染表列表
+    function renderTables(tables) {
+        const grid = document.getElementById('tablesGrid');
+        
+        if (tables.length === 0) {
+            grid.innerHTML = '<div class="empty-state">暂无数据表</div>';
+            return;
+        }
+
+        grid.innerHTML = tables.map(table => `
+            <div class="table-card" onclick="selectTable('${table.name}')">
+                <div class="table-name">${table.name}</div>
+                <div class="table-info">
+                    <span>📝 ${table.row_count.toLocaleString()} 条记录</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 选择表
+    async function selectTable(tableName) {
+        currentTable = tableName;
+        currentPage = 0;
+        
+        // 更新UI
+        document.querySelectorAll('.table-card').forEach(card => {
+            card.classList.remove('active');
+            if (card.textContent.includes(tableName)) {
+                card.classList.add('active');
+            }
+        });
+
+        document.getElementById('currentTableName').textContent = tableName;
+        document.getElementById('dataView').style.display = 'block';
+        
+        // 滚动到数据视图
+        document.getElementById('dataView').scrollIntoView({ behavior: 'smooth' });
+
+        // 加载数据
+        await loadTableData();
+        await loadTableStructure();
+    }
+
+    // 加载表数据
+    async function loadTableData() {
+        if (!currentTable) return;
+
+        try {
+            const response = await fetch(
+                `/api/database/table/${currentTable}/data?limit=${currentLimit}&offset=${currentPage * currentLimit}`
+            );
+            const result = await response.json();
+            
+            if (result.success) {
+                totalRecords = result.total;
+                renderTableData(result.data);
+                updatePagination();
+            } else {
+                showMessage(result.message, 'error');
+            }
+        } catch (error) {
+            console.error('加载表数据失败:', error);
+            showMessage('加载失败', 'error');
+        }
+    }
+
+    // 渲染表数据
+    function renderTableData(data) {
+        const thead = document.getElementById('dataTableHead');
+        const tbody = document.getElementById('dataTableBody');
+
+        if (data.length === 0) {
+            thead.innerHTML = '';
+            tbody.innerHTML = '<tr><td colspan="100" class="empty-state">暂无数据</td></tr>';
+            return;
+        }
+
+        // 渲染表头
+        const columns = Object.keys(data[0]);
+        thead.innerHTML = `<tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
+
+        // 渲染数据
+        tbody.innerHTML = data.map(row => {
+            return `<tr>${columns.map(col => {
+                let value = row[col];
+                // 格式化显示
+                if (value === null || value === undefined) {
+                    value = '<span style="color: #ccc;">NULL</span>';
+                } else if (typeof value === 'string' && value.length > 100) {
+                    value = value.substring(0, 100) + '...';
+                }
+                return `<td>${value}</td>`;
+            }).join('')}</tr>`;
+        }).join('');
+    }
+
+    // 更新分页信息
+    function updatePagination() {
+        const totalPages = Math.ceil(totalRecords / currentLimit);
+        const info = `第 ${currentPage + 1} 页 / 共 ${totalPages} 页 (总计 ${totalRecords.toLocaleString()} 条)`;
+        
+        document.getElementById('paginationInfo').textContent = info;
+        document.getElementById('paginationInfo2').textContent = info;
+
+        // 更新按钮状态
+        const prevButtons = document.querySelectorAll('.pagination button:first-child');
+        const nextButtons = document.querySelectorAll('.pagination button:nth-child(3)');
+        
+        prevButtons.forEach(btn => btn.disabled = currentPage === 0);
+        nextButtons.forEach(btn => btn.disabled = currentPage >= totalPages - 1);
+    }
+
+    // 上一页
+    function previousPage() {
+        if (currentPage > 0) {
+            currentPage--;
+            loadTableData();
+        }
+    }
+
+    // 下一页
+    function nextPage() {
+        const totalPages = Math.ceil(totalRecords / currentLimit);
+        if (currentPage < totalPages - 1) {
+            currentPage++;
+            loadTableData();
+        }
+    }
+
+    // 改变每页显示数量
+    function changeLimit() {
+        currentLimit = parseInt(document.getElementById('limitSelect').value);
+        currentPage = 0;
+        loadTableData();
+    }
+
+    // 加载表结构
+    async function loadTableStructure() {
+        if (!currentTable) return;
+
+        try {
+            const response = await fetch(`/api/database/table/${currentTable}/structure`);
+            const result = await response.json();
+            
+            if (result.success) {
+                renderTableStructure(result.data);
+            }
+        } catch (error) {
+            console.error('加载表结构失败:', error);
+        }
+    }
+
+    // 渲染表结构
+    function renderTableStructure(structure) {
+        const view = document.getElementById('structureView');
+        
+        view.innerHTML = structure.map(field => `
+            <div class="structure-item">
+                <div>
+                    <span class="field-name">${field.name}</span>
+                    ${field.pk ? '<span style="color: #f56c6c; font-size: 0.8rem; margin-left: 0.5rem;">PRIMARY KEY</span>' : ''}
+                    ${field.notnull ? '<span style="color: #e6a23c; font-size: 0.8rem; margin-left: 0.5rem;">NOT NULL</span>' : ''}
+                </div>
+                <div class="field-type">${field.type}${field.dflt_value ? ` = ${field.dflt_value}` : ''}</div>
+            </div>
+        `).join('');
+    }
+
+    // 切换选项卡
+    function switchTab(tabName) {
+        // 更新选项卡状态
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById(tabName + 'Tab').classList.add('active');
+    }
+
+    // 执行自定义查询
+    async function executeCustomQuery() {
+        const query = document.getElementById('customQuery').value.trim();
+        
+        if (!query) {
+            showMessage('请输入查询语句', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/database/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                renderQueryResult(result.data);
+                showMessage('查询成功', 'success');
+            } else {
+                showMessage(result.message, 'error');
+            }
+        } catch (error) {
+            console.error('查询失败:', error);
+            showMessage('查询失败', 'error');
+        }
+    }
+
+    // 渲染查询结果
+    function renderQueryResult(data) {
+        const resultDiv = document.getElementById('queryResult');
+        
+        if (data.length === 0) {
+            resultDiv.innerHTML = '<div class="empty-state">查询无结果</div>';
+            return;
+        }
+
+        const columns = Object.keys(data[0]);
+        const html = `
+            <div style="overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>
+                        ${data.map(row => `
+                            <tr>${columns.map(col => {
+                                let value = row[col];
+                                if (value === null || value === undefined) {
+                                    value = '<span style="color: #ccc;">NULL</span>';
+                                } else if (typeof value === 'string' && value.length > 100) {
+                                    value = value.substring(0, 100) + '...';
+                                }
+                                return `<td>${value}</td>`;
+                            }).join('')}</tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top: 1rem; color: #666;">共 ${data.length} 条结果</div>
+        `;
+        
+        resultDiv.innerHTML = html;
+    }
+
+    // 清空查询
+    function clearQuery() {
+        document.getElementById('customQuery').value = '';
+        document.getElementById('queryResult').innerHTML = '';
+    }
+</script>
+{% endblock %}

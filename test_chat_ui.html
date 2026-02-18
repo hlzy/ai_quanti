@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI对话UI测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .chat-history {
+            overflow-y: auto;
+            border: 1px solid #e4e7ed;
+            border-radius: 5px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #fafafa;
+            min-height: 400px;
+            max-height: 600px;
+            resize: vertical;
+        }
+        
+        .chat-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .chat-message {
+            margin-bottom: 0.5rem;
+            padding: 0.8rem;
+            border-radius: 8px;
+            position: relative;
+        }
+        
+        .chat-message.user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+            max-width: 80%;
+            border-radius: 12px 12px 0 12px;
+        }
+        
+        .chat-message.assistant {
+            background: white;
+            border: 1px solid #e4e7ed;
+            margin-left: 0;
+            max-width: 90%;
+            border-radius: 12px 12px 12px 0;
+            line-height: 1.6;
+        }
+        
+        .chat-time {
+            font-size: 0.7rem;
+            opacity: 0.6;
+            margin-top: 0.3rem;
+            text-align: right;
+        }
+        
+        .chat-message.user .chat-time {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .chat-message.assistant .chat-time {
+            color: #909399;
+        }
+        
+        .chat-input-area {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .chat-input-area textarea {
+            flex: 1;
+            min-height: 80px;
+            resize: vertical;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+        }
+        
+        .chat-input-area button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .chat-input-area button:hover {
+            background: #5568d3;
+        }
+        
+        .test-info {
+            background: #e3f2fd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .test-info h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        
+        .test-info ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .test-info li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI对话功能UI测试</h1>
+    
+    <div class="test-info">
+        <h3>✅ 已实现的功能：</h3>
+        <ul>
+            <li><strong>用户问题 + AI回复组合显示</strong>：每个用户问题后紧跟AI回复</li>
+            <li><strong>时间格式</strong>：2026/2/18 16:46:12</li>
+            <li><strong>对话框可调整高度</strong>：拖动右下角调整大小</li>
+            <li><strong>自动滚动</strong>：超过高度时显示滚动条</li>
+            <li><strong>回车发送</strong>：按Enter键发送消息</li>
+            <li><strong>Shift+回车换行</strong>：按Shift+Enter换行</li>
+        </ul>
+    </div>
+    
+    <div class="test-section">
+        <h2>对话演示</h2>
+        <div class="chat-history" id="chatHistory">
+            <div class="chat-group">
+                <div class="chat-message user">
+                    <div>300058这支股票怎么样？</div>
+                    <div class="chat-time">2026/02/18 14:30:15</div>
+                </div>
+                <div class="chat-message assistant">
+                    <div>300058蓝色光标是一家专注于数字营销和公关传播的公司。从技术分析来看：<br><br>
+                    1. <strong>趋势判断</strong>：当前股价处于震荡整理阶段<br>
+                    2. <strong>MACD指标</strong>：MACD线位于信号线上方，显示多头信号<br>
+                    3. <strong>RSI指标</strong>：RSI(6)为45.23，处于中性区域<br>
+                    4. <strong>建议</strong>：可适当关注，等待更明确的买入信号</div>
+                    <div class="chat-time">2026/02/18 14:30:22</div>
+                </div>
+            </div>
+            
+            <div class="chat-group">
+                <div class="chat-message user">
+                    <div>现在可以买入吗？</div>
+                    <div class="chat-time">2026/02/18 14:31:05</div>
+                </div>
+                <div class="chat-message assistant">
+                    <div>基于当前的技术指标分析：<br><br>
+                    <strong>谨慎观望</strong>为宜。理由如下：<br>
+                    1. MACD虽然金叉，但动能不够强<br>
+                    2. 成交量未明显放大<br>
+                    3. 建议等待突破关键阻力位后再考虑入场<br><br>
+                    <em>注：以上仅为技术分析参考，不构成投资建议</em></div>
+                    <div class="chat-time">2026/02/18 14:31:18</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-area">
+            <textarea id="chatInput" placeholder="输入消息... (回车发送，Shift+回车换行)"></textarea>
+            <button onclick="simulateSend()">发送</button>
+        </div>
+    </div>
+    
+    <div class="test-info">
+        <h3>🎯 测试说明：</h3>
+        <ul>
+            <li>在输入框中输入文字</li>
+            <li>按 <strong>Enter键</strong> 直接发送（注意：这里只是模拟，不会真正发送）</li>
+            <li>按 <strong>Shift+Enter</strong> 可以换行</li>
+            <li>拖动对话框右下角可以调整高度</li>
+            <li>点击"发送"按钮也可以发送消息</li>
+        </ul>
+    </div>
+    
+    <script>
+        // 格式化日期时间
+        function formatDateTime(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+        }
+        
+        // 模拟发送消息
+        function simulateSend() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) {
+                alert('请输入消息');
+                return;
+            }
+            
+            const container = document.getElementById('chatHistory');
+            const now = new Date();
+            
+            // 添加用户消息和模拟AI回复
+            const msgHtml = `
+                <div class="chat-group">
+                    <div class="chat-message user">
+                        <div>${message}</div>
+                        <div class="chat-time">${formatDateTime(now)}</div>
+                    </div>
+                    <div class="chat-message assistant">
+                        <div>这是AI的模拟回复：收到您的消息"${message}"</div>
+                        <div class="chat-time">${formatDateTime(new Date(now.getTime() + 3000))}</div>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', msgHtml);
+            container.scrollTop = container.scrollHeight;
+            
+            input.value = '';
+        }
+        
+        // 回车发送，Shift+回车换行
+        document.getElementById('chatInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                simulateSend();
+            }
+        });
+    </script>
+</body>
+</html>

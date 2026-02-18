@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown渲染测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .demo-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .chat-message {
+            margin-bottom: 1rem;
+            padding: 0.8rem;
+            border-radius: 8px;
+        }
+        
+        .chat-message.assistant {
+            background: white;
+            border: 1px solid #e4e7ed;
+            max-width: 90%;
+            border-radius: 12px 12px 12px 0;
+            line-height: 1.6;
+        }
+        
+        /* Markdown样式 */
+        .markdown-content h1, .markdown-content h2, .markdown-content h3,
+        .markdown-content h4, .markdown-content h5, .markdown-content h6 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .markdown-content h1 { font-size: 1.5rem; }
+        .markdown-content h2 { font-size: 1.3rem; }
+        .markdown-content h3 { font-size: 1.1rem; }
+        
+        .markdown-content p {
+            margin-bottom: 0.8rem;
+            line-height: 1.6;
+        }
+        
+        .markdown-content ul, .markdown-content ol {
+            margin-left: 1.5rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .markdown-content li {
+            margin-bottom: 0.3rem;
+            line-height: 1.5;
+        }
+        
+        .markdown-content code {
+            background: #f5f5f5;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .markdown-content pre {
+            background: #f5f5f5;
+            padding: 1rem;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin-bottom: 0.8rem;
+        }
+        
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+        }
+        
+        .markdown-content blockquote {
+            border-left: 4px solid #ddd;
+            padding-left: 1rem;
+            margin: 0.8rem 0;
+            color: #666;
+        }
+        
+        .markdown-content strong {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .markdown-content em {
+            font-style: italic;
+        }
+        
+        .markdown-content hr {
+            border: none;
+            border-top: 1px solid #e4e7ed;
+            margin: 1rem 0;
+        }
+        
+        .markdown-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 0.8rem;
+        }
+        
+        .markdown-content table th,
+        .markdown-content table td {
+            border: 1px solid #ddd;
+            padding: 0.5rem;
+            text-align: left;
+        }
+        
+        .markdown-content table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        
+        .original {
+            background: #fef3c7;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI对话Markdown渲染测试</h1>
+    
+    <div class="demo-section">
+        <h2>测试1：标题和列表</h2>
+        
+        <h3>原始Markdown文本：</h3>
+        <div class="original" id="demo1-source"></div>
+        
+        <h3>渲染效果：</h3>
+        <div class="chat-message assistant" id="demo1-render"></div>
+    </div>
+    
+    <div class="demo-section">
+        <h2>测试2：股票分析示例（带表格和加粗）</h2>
+        
+        <h3>原始Markdown文本：</h3>
+        <div class="original" id="demo2-source"></div>
+        
+        <h3>渲染效果：</h3>
+        <div class="chat-message assistant" id="demo2-render"></div>
+    </div>
+    
+    <div class="demo-section">
+        <h2>测试3：复杂格式（代码、引用、分隔线）</h2>
+        
+        <h3>原始Markdown文本：</h3>
+        <div class="original" id="demo3-source"></div>
+        
+        <h3>渲染效果：</h3>
+        <div class="chat-message assistant" id="demo3-render"></div>
+    </div>
+    
+    <script>
+        // 配置marked
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            headerIds: false,
+            mangle: false
+        });
+        
+        // 测试1：标题和列表
+        const demo1Text = `## 技术分析报告
+
+### 一、整体趋势分析
+
+**股价走势**：
+- 2025年11月20日至2026年2月13日
+- 股价从**58.10元**上涨至**85.65元**
+- 涨幅约**47%**，整体呈上涨趋势
+
+### 二、关键支撑与阻力位
+
+1. **支撑位** - **76.30元**（2026-02-06）
+2. **阻力位** - **89.22元**（2026-01-09）
+
+---
+
+### 三、技术指标分析
+
+**MACD指标**：MACD柱状图呈正向增长，表明股价处于上升通道。
+
+**RSI指标**：RSI值在**50以上**，说明股价处于强势区域。`;
+
+        // 测试2：表格和加粗
+        const demo2Text = `## 投资建议
+
+### 短期（1-2周）
+
+| 操作 | 价格区间 | 建议 |
+|------|---------|------|
+| **买入** | 76.30元 或 75.20元附近 | 可考虑分批建仓 |
+| **卖出** | 85.65元 或 89.22元 | 日未能有效突破 |
+
+**前提条件**：成交量够配合
+
+### 中期（1个月）
+
+若股价能稳定在**80元以上**，并持续放量，可视为**强势信号**，继续持有。
+
+### 风险提示
+
+1. **市场情绪波动**：股价短期内快速上涨
+2. **资金面变化**：若成交量大幅减少
+3. **行业竞争**：半导体行业竞争激烈`;
+
+        // 测试3：代码和引用
+        const demo3Text = `## 技术分析要点
+
+### MACD金叉信号
+
+当MACD线向上穿越信号线时，通常被视为买入信号：
+
+\`\`\`
+MACD > Signal Line
+DIF > DEA
+→ 金叉形成
+\`\`\`
+
+### 重要提示
+
+> **注意**：以上仅为技术分析参考，不构成投资建议。
+> 
+> 投资有风险，入市需谨慎！
+
+---
+
+### RSI指标说明
+
+- RSI < 30：**超卖区域**
+- RSI 30-70：**正常区域**  
+- RSI > 70：**超买区域**
+
+当前RSI值为 \`68.23\`，接近超买区域，需要*谨慎观望*。`;
+        
+        // 渲染函数
+        function renderDemo(demoNum, text) {
+            // 显示原始文本
+            document.getElementById(`demo${demoNum}-source`).textContent = text;
+            
+            // 渲染Markdown
+            const html = marked.parse(text);
+            document.getElementById(`demo${demoNum}-render`).innerHTML = 
+                `<div class="markdown-content">${html}</div>`;
+        }
+        
+        // 渲染所有演示
+        renderDemo(1, demo1Text);
+        renderDemo(2, demo2Text);
+        renderDemo(3, demo3Text);
+    </script>
+</body>
+</html>

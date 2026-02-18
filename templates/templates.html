@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}对话模版 - AI量化工具{% endblock %}
+
+{% block extra_css %}
+<style>
+    .templates-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+
+    .template-list {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .template-item {
+        padding: 1rem;
+        border: 1px solid #e4e7ed;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .template-item:hover {
+        border-color: #667eea;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    .template-item.active {
+        border-color: #667eea;
+        background: #f0f5ff;
+    }
+
+    .template-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        color: #333;
+    }
+
+    .template-preview {
+        font-size: 0.9rem;
+        color: #909399;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .template-actions {
+        margin-top: 0.5rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .template-editor textarea {
+        min-height: 300px;
+        font-family: 'Courier New', monospace;
+    }
+
+    .editor-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #909399;
+    }
+
+    @media (max-width: 1024px) {
+        .templates-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="templates-layout">
+    <!-- 左侧：模版列表 -->
+    <div class="card">
+        <div class="card-header">📝 模版列表</div>
+        <button class="btn btn-primary" onclick="showNewTemplateEditor()" style="margin-bottom: 1rem; width: 100%;">
+            ➕ 新建模版
+        </button>
+        <div class="template-list" id="templateList">
+            <div class="loading">加载中</div>
+        </div>
+    </div>
+
+    <!-- 右侧：模版编辑器 -->
+    <div class="card">
+        <div class="card-header">✏️ 模版编辑</div>
+        <div id="editorContainer">
+            <div class="empty-state">← 选择或新建一个模版开始编辑</div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTemplate = null;
+
+// 加载模版列表
+async function loadTemplates() {
+    try {
+        const response = await fetch('/api/templates');
+        const result = await response.json();
+        
+        const container = document.getElementById('templateList');
+        if (result.success) {
+            if (result.data.length === 0) {
+                container.innerHTML = '<div class="empty-state">暂无模版<br>点击上方按钮创建第一个模版</div>';
+            } else {
+                container.innerHTML = result.data.map(template => `
+                    <div class="template-item" onclick="selectTemplate(${template.id})">
+                        <div class="template-name">${template.name}</div>
+                        <div class="template-preview">${template.content.substring(0, 100)}...</div>
+                        <div class="template-actions">
+                            <button class="btn btn-primary" onclick="event.stopPropagation(); selectTemplate(${template.id})" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">编辑</button>
+                            <button class="btn btn-danger" onclick="event.stopPropagation(); deleteTemplate(${template.id})" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">删除</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (error) {
+        console.error('加载模版失败:', error);
+    }
+}
+
+// 选择模版
+async function selectTemplate(templateId) {
+    try {
+        const response = await fetch('/api/templates');
+        const result = await response.json();
+        
+        if (result.success) {
+            const template = result.data.find(t => t.id === templateId);
+            if (template) {
+                currentTemplate = template;
+                showTemplateEditor(template);
+                
+                // 更新选中状态
+                document.querySelectorAll('.template-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                event.currentTarget.classList.add('active');
+            }
+        }
+    } catch (error) {
+        console.error('加载模版失败:', error);
+    }
+}
+
+// 显示新建模版编辑器
+function showNewTemplateEditor() {
+    currentTemplate = null;
+    showTemplateEditor({
+        id: null,
+        name: '',
+        content: ''
+    });
+}
+
+// 显示模版编辑器
+function showTemplateEditor(template) {
+    const container = document.getElementById('editorContainer');
+    const isNew = !template.id;
+    
+    container.innerHTML = `
+        <form id="templateForm" class="template-editor">
+            <div class="input-group">
+                <label>模版名称 *</label>
+                <input type="text" id="templateName" value="${template.name}" required placeholder="例如：技术分析初始话术" />
+            </div>
+            <div class="input-group">
+                <label>模版内容 *</label>
+                <textarea id="templateContent" required placeholder="输入对话模版内容...">${template.content}</textarea>
+            </div>
+            <div class="editor-actions">
+                <button type="submit" class="btn btn-primary">${isNew ? '创建' : '保存'}</button>
+                ${isNew ? '' : '<button type="button" class="btn" onclick="cancelEdit()">取消</button>'}
+            </div>
+        </form>
+    `;
+    
+    // 绑定表单提交事件
+    document.getElementById('templateForm').addEventListener('submit', saveTemplate);
+}
+
+// 保存模版
+async function saveTemplate(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('templateName').value.trim();
+    const content = document.getElementById('templateContent').value.trim();
+    
+    if (!name || !content) {
+        showMessage('请填写完整信息', 'error');
+        return;
+    }
+    
+    try {
+        const isNew = !currentTemplate || !currentTemplate.id;
+        const url = isNew ? '/api/templates' : `/api/templates/${currentTemplate.id}`;
+        const method = isNew ? 'POST' : 'PUT';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, content })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showMessage(isNew ? '创建成功' : '保存成功');
+            await loadTemplates();
+            if (isNew) {
+                document.getElementById('editorContainer').innerHTML = '<div class="empty-state">← 选择或新建一个模版开始编辑</div>';
+            }
+        } else {
+            showMessage(result.message, 'error');
+        }
+    } catch (error) {
+        showMessage('操作失败: ' + error.message, 'error');
+    }
+}
+
+// 删除模版
+async function deleteTemplate(templateId) {
+    if (!confirm('确定要删除这个模版吗？')) return;
+    
+    try {
+        const response = await fetch(`/api/templates/${templateId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showMessage('删除成功');
+            await loadTemplates();
+            
+            // 如果删除的是当前编辑的模版，清空编辑器
+            if (currentTemplate && currentTemplate.id === templateId) {
+                currentTemplate = null;
+                document.getElementById('editorContainer').innerHTML = '<div class="empty-state">← 选择或新建一个模版开始编辑</div>';
+            }
+        } else {
+            showMessage(result.message, 'error');
+        }
+    } catch (error) {
+        showMessage('删除失败: ' + error.message, 'error');
+    }
+}
+
+// 取消编辑
+function cancelEdit() {
+    currentTemplate = null;
+    document.getElementById('editorContainer').innerHTML = '<div class="empty-state">← 选择或新建一个模版开始编辑</div>';
+    document.querySelectorAll('.template-item').forEach(item => {
+        item.classList.remove('active');
+    });
+}
+
+// 页面加载完成
+document.addEventListener('DOMContentLoaded', () => {
+    loadTemplates();
+});
+</script>
+{% endblock %}
