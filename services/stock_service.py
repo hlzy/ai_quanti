@@ -6,6 +6,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from database import db_manager
 from config import config
+from utils.logger import stock_logger
+import time
 
 
 class StockService:
@@ -16,17 +18,71 @@ class StockService:
         if config.TUSHARE_TOKEN:
             ts.set_token(config.TUSHARE_TOKEN)
             self.pro = ts.pro_api()
+            stock_logger.info("Stock service initialized successfully")
         else:
+            stock_logger.error("Tushare Token未配置")
             raise ValueError("Tushare Token未配置，请在.env文件中设置TUSHARE_TOKEN")
+        
+        # API调用限流
+        self._last_api_call = {}  # 记录每个接口的最后调用时间
+    
+    def detect_code_type(self, stock_code):
+        """检测代码类型
+        
+        Returns:
+            'stock': A股
+            'index': 指数
+            'fund': ETF/基金
+        """
+        # 如果已带后缀
+        if '.' in stock_code:
+            code_only = stock_code.split('.')[0]
+        else:
+            code_only = stock_code
+        
+        # 指数判断
+        # 上证指数：000001等
+        # 深证指数：399001等
+        if code_only.startswith('000') or code_only.startswith('399'):
+            return 'index'
+        
+        # ETF判断
+        # 上交所ETF: 51、52开头
+        # 深交所ETF: 15、16开头
+        if code_only.startswith(('51', '52', '15', '16')):
+            return 'fund'
+        
+        # 默认为A股
+        return 'stock'
+    
+    def _rate_limit_check(self, api_name, min_interval=30):
+        """API限流检查
+        
+        Args:
+            api_name: API名称
+            min_interval: 最小调用间隔（秒），默认30秒
+        """
+        current_time = time.time()
+        last_call = self._last_api_call.get(api_name, 0)
+        
+        if current_time - last_call < min_interval:
+            wait_time = min_interval - (current_time - last_call)
+            stock_logger.info(f"API限流: {api_name} 等待 {wait_time:.1f} 秒")
+            time.sleep(wait_time)
+        
+        self._last_api_call[api_name] = time.time()
     
     def normalize_stock_code(self, stock_code):
         """标准化股票代码
-        支持A股、港股、美股等多市场
+        支持A股、指数、ETF等
         
         规则：
-        - A股上海：6开头的6位数字
-        - A股深圳：0或3开头的6位数字
-        - 港股：5位或以下纯数字（如 00700, 02050）
+        - A股上海：6开头的6位数字 -> .SH
+        - A股深圳：0或3开头的6位数字 -> .SZ
+        - 上证指数：000001等 -> .SH
+        - 深证指数：399001等 -> .SZ
+        - 上交所ETF：51、52开头 -> .SH
+        - 深交所ETF：15、16开头 -> .SZ
         - 已带后缀的直接返回
         """
         if '.' in stock_code:
@@ -38,89 +94,141 @@ class StockService:
         
         # 6位数字
         if len(stock_code) == 6:
-            if stock_code.startswith('6'):
-                return f"{stock_code}.SH"  # 上海
+            # 上证指数（000开头）
+            if stock_code.startswith('000'):
+                return f"{stock_code}.SH"
+            # 深证指数（399开头）
+            elif stock_code.startswith('399'):
+                return f"{stock_code}.SZ"
+            # 上交所ETF（51、52开头）
+            elif stock_code.startswith(('51', '52')):
+                return f"{stock_code}.SH"
+            # 深交所ETF（15、16开头）
+            elif stock_code.startswith(('15', '16')):
+                return f"{stock_code}.SZ"
+            # A股上海（6开头）
+            elif stock_code.startswith('6'):
+                return f"{stock_code}.SH"
+            # A股深圳（0、3开头）
             else:
-                return f"{stock_code}.SZ"  # 深圳
-        
-        # 5位及以下数字，判断为港股
-        elif len(stock_code) <= 5:
-            # 补齐到5位
-            padded_code = stock_code.zfill(5)
-            return f"{padded_code}.HK"
+                return f"{stock_code}.SZ"
         
         # 其他情况默认深圳
         else:
             return f"{stock_code}.SZ"
     
     def get_stock_info(self, stock_code):
-        """获取股票基本信息"""
+        """获取股票/指数/ETF基本信息"""
         try:
             ts_code = self.normalize_stock_code(stock_code)
+            code_type = self.detect_code_type(stock_code)
             
-            # 判断市场类型
-            if ts_code.endswith('.HK'):
-                # 港股查询
-                df = self.pro.hk_basic(ts_code=ts_code, fields='ts_code,name,list_date,list_status')
+            stock_logger.debug(f"查询股票信息: {ts_code}, 类型: {code_type}")
+            
+            if code_type == 'index':
+                # 指数查询
+                df = self.pro.index_basic(ts_code=ts_code, fields='ts_code,name,market,publisher,category')
                 if not df.empty:
-                    return df.iloc[0].to_dict()
+                    info = df.iloc[0].to_dict()
+                    info['type'] = 'index'
+                    stock_logger.info(f"查询到指数: {info.get('name')} ({ts_code})")
+                    return info
+            elif code_type == 'fund':
+                # ETF查询
+                df = self.pro.fund_basic(ts_code=ts_code, market='E', fields='ts_code,name,management,fund_type,issue_date,list_date')
+                if not df.empty:
+                    info = df.iloc[0].to_dict()
+                    info['type'] = 'fund'
+                    stock_logger.info(f"查询到ETF: {info.get('name')} ({ts_code})")
+                    return info
             else:
                 # A股查询
                 df = self.pro.stock_basic(ts_code=ts_code, fields='ts_code,symbol,name,area,industry,list_date')
                 if not df.empty:
-                    return df.iloc[0].to_dict()
+                    info = df.iloc[0].to_dict()
+                    info['type'] = 'stock'
+                    stock_logger.info(f"查询到股票: {info.get('name')} ({ts_code})")
+                    return info
             
+            stock_logger.warning(f"未查询到股票信息: {ts_code}")
             return None
         except Exception as e:
-            print(f"获取股票信息失败: {e}")
-            import traceback
-            traceback.print_exc()
+            stock_logger.error(f"获取股票信息失败: {stock_code}", exc_info=True)
+            print(f"获取信息失败: {e}")
             return None
     
     def fetch_daily_data(self, stock_code, start_date=None, end_date=None):
-        """获取日K线数据"""
+        """获取日K线数据（支持A股、指数、ETF）"""
         try:
             ts_code = self.normalize_stock_code(stock_code)
+            code_type = self.detect_code_type(stock_code)
             
             if not end_date:
                 end_date = datetime.now().strftime('%Y%m%d')
             if not start_date:
                 start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
             
-            # 根据市场选择不同的API
-            if ts_code.endswith('.HK'):
-                # 港股日线数据
-                df = self.pro.hk_daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            stock_logger.debug(f"获取日K线: {ts_code}, 日期范围: {start_date} - {end_date}")
+            
+            # 根据类型选择不同的API
+            if code_type == 'index':
+                # 指数日线数据
+                df = self.pro.index_daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            elif code_type == 'fund':
+                # ETF日线数据
+                df = self.pro.fund_daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
             else:
                 # A股日线数据
                 df = self.pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
             
             if df.empty:
+                stock_logger.warning(f"日K线数据为空: {ts_code}")
                 return []
             
             df['trade_date'] = pd.to_datetime(df['trade_date'])
             df = df.sort_values('trade_date')
+            stock_logger.info(f"获取日K线成功: {ts_code}, 数据条数: {len(df)}")
             return df.to_dict('records')
         except Exception as e:
+            stock_logger.error(f"获取日K线失败: {stock_code}, {start_date} - {end_date}", exc_info=True)
             print(f"获取日K线数据失败: {e}")
-            import traceback
-            traceback.print_exc()
             return []
     
     def fetch_weekly_data(self, stock_code, start_date=None, end_date=None):
-        """获取周K线数据"""
+        """获取周K线数据（支持A股、指数、ETF）"""
         try:
             ts_code = self.normalize_stock_code(stock_code)
+            code_type = self.detect_code_type(stock_code)
             
             if not end_date:
                 end_date = datetime.now().strftime('%Y%m%d')
             if not start_date:
                 start_date = (datetime.now() - timedelta(days=720)).strftime('%Y%m%d')
             
-            # 根据市场选择不同的API
-            if ts_code.endswith('.HK'):
-                # 港股周线数据
-                df = self.pro.hk_weekly(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            # 根据类型选择不同的API
+            if code_type == 'index':
+                # 指数周线数据
+                df = self.pro.index_weekly(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            elif code_type == 'fund':
+                # ETF周线数据 - Tushare可能不支持，使用日线数据聚合
+                daily_df = self.pro.fund_daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+                if daily_df.empty:
+                    return []
+                # 转换为周线
+                daily_df['trade_date'] = pd.to_datetime(daily_df['trade_date'])
+                daily_df = daily_df.set_index('trade_date')
+                weekly_df = daily_df.resample('W').agg({
+                    'open': 'first',
+                    'high': 'max',
+                    'low': 'min',
+                    'close': 'last',
+                    'vol': 'sum',
+                    'amount': 'sum'
+                }).dropna()
+                weekly_df['ts_code'] = ts_code
+                weekly_df = weekly_df.reset_index()
+                weekly_df = weekly_df.rename(columns={'trade_date': 'trade_date'})
+                df = weekly_df
             else:
                 # A股周线数据
                 df = self.pro.weekly(ts_code=ts_code, start_date=start_date, end_date=end_date)
@@ -128,45 +236,61 @@ class StockService:
             if df.empty:
                 return []
             
-            df['trade_date'] = pd.to_datetime(df['trade_date'])
-            df = df.sort_values('trade_date')
+            if 'trade_date' in df.columns:
+                df['trade_date'] = pd.to_datetime(df['trade_date'])
+                df = df.sort_values('trade_date')
+            stock_logger.info(f"获取周K线成功: {ts_code}, 数据条数: {len(df)}")
             return df.to_dict('records')
         except Exception as e:
+            stock_logger.error(f"获取周K线失败: {stock_code}, {start_date} - {end_date}", exc_info=True)
             print(f"获取周K线数据失败: {e}")
-            import traceback
-            traceback.print_exc()
             return []
     
     def fetch_minute_data(self, stock_code, freq='1min'):
         """获取分钟K线数据
         
         Args:
-            stock_code: 股票代码
+            stock_code: 股票/ETF代码
             freq: 频率，默认1min（1分钟），可选：1min, 5min, 15min, 30min, 60min
         
         Returns:
             最近2天的分钟K线数据
+            
+        Note:
+            - 指数不支持分钟数据
+            - 需要Tushare高级权限
+            - 每分钟最多调用2次
         """
         try:
             ts_code = self.normalize_stock_code(stock_code)
+            code_type = self.detect_code_type(stock_code)
             
-            # 港股暂不支持分钟数据
-            if ts_code.endswith('.HK'):
-                print(f"港股暂不支持分钟K线数据")
+            stock_logger.debug(f"获取分钟K线: {ts_code}, 频率: {freq}")
+            
+            # 指数不支持分钟数据
+            if code_type == 'index':
+                stock_logger.warning(f"指数不支持分钟K线: {ts_code}")
+                print(f"指数不支持分钟K线数据")
                 return []
+            
+            # API限流 - 分钟K线需要特别注意，每分钟最多2次
+            self._rate_limit_check(f'pro_bar_{freq}', min_interval=30)
             
             # 获取最近2天的数据（考虑周末，取4天）
             end_date = datetime.now()
             start_date = end_date - timedelta(days=4)
             
             # Tushare分钟数据接口
+            # ETF使用asset='FD'，股票使用asset='E'
+            asset_type = 'FD' if code_type == 'fund' else 'E'
+            
             df = ts.pro_bar(
                 ts_code=ts_code,
                 freq=freq,
                 start_date=start_date.strftime('%Y%m%d'),
                 end_date=end_date.strftime('%Y%m%d'),
                 adj='qfq',  # 前复权
-                asset='E'   # 股票
+                asset=asset_type
             )
             
             if df is None or df.empty:
@@ -181,9 +305,24 @@ class StockService:
             
             return df.to_dict('records')
         except Exception as e:
-            print(f"获取分钟K线数据失败: {e}")
-            import traceback
-            traceback.print_exc()
+            error_msg = str(e)
+            
+            # 识别权限错误
+            if 'ERROR.' in error_msg or '权限' in error_msg:
+                stock_logger.warning(
+                    f"分钟K线权限不足 - 股票: {ts_code}, 频率: {freq}\n"
+                    f"错误信息: {error_msg}\n"
+                    f"提示: 该接口需要Tushare高级权限，详情: https://tushare.pro/document/1?doc_id=108"
+                )
+                print(f"  ⚠️ {ts_code} 无{freq}分钟K线数据（可能需要权限）")
+            else:
+                # 其他错误记录完整堆栈
+                stock_logger.error(
+                    f"获取分钟K线数据失败 - 股票: {ts_code}, 频率: {freq}",
+                    exc_info=True
+                )
+                print(f"  ❌ {ts_code} 获取分钟K线失败: {error_msg}")
+            
             return []
     
     def calculate_indicators(self, df):

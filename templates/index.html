@@ -20,6 +20,7 @@
         border-bottom: 1px solid #f0f0f0;
         cursor: pointer;
         transition: background 0.2s;
+        position: relative;
     }
 
     .stock-item:hover {
@@ -34,6 +35,31 @@
     .stock-code {
         font-weight: 600;
         color: #667eea;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .stock-type-badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 3px;
+        font-weight: 500;
+    }
+
+    .stock-type-stock {
+        background: #e8f4ff;
+        color: #667eea;
+    }
+
+    .stock-type-index {
+        background: #fff3e0;
+        color: #ff9800;
+    }
+
+    .stock-type-fund {
+        background: #e8f5e9;
+        color: #4caf50;
     }
 
     .stock-name {
@@ -289,6 +315,126 @@
     .negative {
         color: #f56c6c;
     }
+
+    /* 模态框样式 */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+        background: white;
+        margin: 5% auto;
+        padding: 2rem;
+        border-radius: 10px;
+        width: 80%;
+        max-width: 700px;
+        max-height: 80%;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #e4e7ed;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.3rem;
+        color: #303133;
+    }
+
+    .close {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #909399;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .close:hover {
+        color: #606266;
+    }
+
+    .template-item {
+        padding: 1rem;
+        border: 1px solid #e4e7ed;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .template-item:hover {
+        background: #f8f9fa;
+        border-color: #667eea;
+    }
+
+    .template-name {
+        font-weight: 600;
+        color: #303133;
+        margin-bottom: 0.5rem;
+    }
+
+    .template-content {
+        font-size: 0.9rem;
+        color: #606266;
+        white-space: pre-wrap;
+        max-height: 60px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .variable-help-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .variable-help-section h3 {
+        font-size: 1.1rem;
+        color: #303133;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e4e7ed;
+    }
+
+    .variable-example {
+        background: #f5f7fa;
+        padding: 0.8rem;
+        border-radius: 5px;
+        margin-bottom: 0.8rem;
+        font-family: 'Courier New', monospace;
+    }
+
+    .variable-format {
+        background: #fff3e0;
+        padding: 0.8rem;
+        border-radius: 5px;
+        border-left: 4px solid #ff9800;
+        margin-bottom: 0.8rem;
+    }
+
+    .variable-format strong {
+        color: #f57c00;
+    }
+
+    .param-list {
+        margin-left: 1.5rem;
+    }
+
+    .param-list li {
+        margin-bottom: 0.5rem;
+        color: #606266;
+    }
 </style>
 {% endblock %}
 
@@ -299,7 +445,7 @@
         <div class="card">
             <div class="card-header">📊 自选股</div>
             <div class="add-stock-form">
-                <input type="text" id="newStockCode" placeholder="输入股票代码" />
+                <input type="text" id="newStockCode" placeholder="代码(A股/指数/ETF)" />
                 <button class="btn btn-primary" onclick="addToWatchlist()">添加</button>
             </div>
             <div id="watchlistContainer">
@@ -350,15 +496,120 @@
         <div class="card" style="flex: 1; display: flex; flex-direction: column;">
             <div class="card-header">
                 💬 AI对话记录
+                <button class="btn btn-info" onclick="showVariablesHelp()" style="float: right; font-size: 0.85rem; padding: 0.4rem 0.8rem; margin-left: 0.5rem;" id="helpBtn" disabled title="变量说明">?</button>
                 <button class="btn btn-danger" onclick="clearChat()" style="float: right; font-size: 0.85rem; padding: 0.4rem 0.8rem;" id="clearChatBtn" disabled>清除</button>
             </div>
             <div class="chat-history" id="chatHistory">
-                <div class="empty-state">暂无对话记录</div>
+                <div class="empty-state">
+                    <p style="margin-bottom: 1rem;">暂无对话记录</p>
+                    <button class="btn btn-primary" onclick="showTemplateSelector()" id="selectTemplateBtn" disabled>选择对话模版</button>
+                </div>
             </div>
             <div class="chat-input-area">
                 <textarea id="chatInput" placeholder="输入您的问题..."></textarea>
                 <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn" disabled>发送</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- 变量帮助模态框 -->
+<div id="variablesModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>📚 可用变量说明</h2>
+            <span class="close" onclick="closeVariablesModal()">&times;</span>
+        </div>
+        
+        <div class="variable-help-section">
+            <h3>变量格式</h3>
+            <div class="variable-format">
+                <strong>1. K线数据：K线类型_股票_窗口_指标</strong>
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                变量将自动输出K线关联的：<strong>日期、开盘、收盘、最高、最低、成交量</strong>。
+                如果指标参数有多个指标，则也计算相关指标作为输出。
+            </p>
+            
+            <div class="variable-format" style="margin-top: 1rem;">
+                <strong>2. 仓位信息：持仓 / 可用资金</strong>
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                <strong>持仓</strong>：显示所有持仓股票的详细信息（代码、名称、数量、成本、当前价、盈亏等）及汇总数据。<br>
+                <strong>可用资金</strong>：显示账户可用现金余额。
+            </p>
+        </div>
+
+        <div class="variable-help-section">
+            <h3>参数说明</h3>
+            <ul class="param-list">
+                <li><strong>K线类型</strong>（必填）：1分钟K、日K、周K</li>
+                <li><strong>股票</strong>（选填）：A股、指数、ETF的代码或名称，不填则表示当前选中的股票</li>
+                <li><strong>窗口</strong>（选填）：单位是天数，如 "1天"、"3天"。默认：日K=60天，周K=360天，1分钟K=2天</li>
+                <li><strong>指标</strong>（选填、可多个用&分割）：如 "MACD"、"EMA"、"RSI" 等。多个指标用 "&" 分割，如 "MACD&EMA"</li>
+            </ul>
+        </div>
+
+        <div class="variable-help-section">
+            <h3>示例</h3>
+            
+            <h4 style="font-size: 1rem; color: #667eea; margin-top: 1rem;">K线数据示例</h4>
+            <div class="variable-example">
+                日K_复旦微电_30天_MACD&EMA
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                表示：使用日K线，股票代码是688385（复旦微电），窗口是30天，输出日期、开盘、收盘、最高、最低、成交量、MACD和EMA。
+            </p>
+
+            <div class="variable-example">
+                周K__360天_RSI
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                表示：使用周K线，当前选中股票，窗口是360天，输出基础K线数据和RSI指标。
+            </p>
+
+            <div class="variable-example">
+                1分钟K
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                表示：使用1分钟K线，当前选中股票，默认2天窗口，输出基础K线数据。
+            </p>
+            
+            <h4 style="font-size: 1rem; color: #667eea; margin-top: 1rem;">仓位信息示例</h4>
+            <div class="variable-example">
+                持仓
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                获取所有持仓股票信息，包括持仓数量、成本价、当前价、盈亏金额、盈亏比例，以及总市值、总成本、总盈亏等汇总数据。
+            </p>
+
+            <div class="variable-example">
+                可用资金
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                获取当前账户的可用现金余额。
+            </p>
+            
+            <h4 style="font-size: 1rem; color: #667eea; margin-top: 1rem;">组合使用示例</h4>
+            <div class="variable-example">
+                根据 持仓 和 可用资金 的情况，结合 日K__30天_MACD 判断是否适合加仓。
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                AI将获取完整的持仓信息、可用资金和K线数据，综合分析后给出加仓建议。
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- 模版选择模态框 -->
+<div id="templateModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>📋 选择对话模版</h2>
+            <span class="close" onclick="closeTemplateModal()">&times;</span>
+        </div>
+        <div id="templateList">
+            <div class="loading">加载中...</div>
         </div>
     </div>
 </div>
@@ -377,12 +628,30 @@ async function loadWatchlist() {
             if (result.data.length === 0) {
                 container.innerHTML = '<div class="empty-state">暂无自选股</div>';
             } else {
-                container.innerHTML = result.data.map(stock => `
-                    <div class="stock-item" onclick="selectStock('${stock.stock_code}', '${stock.stock_name}')">
-                        <div class="stock-code">${stock.stock_code}</div>
-                        <div class="stock-name">${stock.stock_name || ''}</div>
-                    </div>
-                `).join('');
+                container.innerHTML = result.data.map(stock => {
+                    // 检测代码类型
+                    let typeLabel = 'A股';
+                    let typeClass = 'stock-type-stock';
+                    const code = stock.stock_code.split('.')[0];
+                    
+                    if (code.startsWith('000') || code.startsWith('399')) {
+                        typeLabel = '指数';
+                        typeClass = 'stock-type-index';
+                    } else if (code.startsWith('51') || code.startsWith('52') || code.startsWith('15') || code.startsWith('16')) {
+                        typeLabel = 'ETF';
+                        typeClass = 'stock-type-fund';
+                    }
+                    
+                    return `
+                        <div class="stock-item" onclick="selectStock('${stock.stock_code}', '${stock.stock_name}')">
+                            <div class="stock-code">
+                                ${stock.stock_code}
+                                <span class="stock-type-badge ${typeClass}">${typeLabel}</span>
+                            </div>
+                            <div class="stock-name">${stock.stock_name || ''}</div>
+                        </div>
+                    `;
+                }).join('');
             }
         }
     } catch (error) {
@@ -432,8 +701,9 @@ async function selectStock(stockCode, stockName) {
     document.getElementById('updateBtn').disabled = false;
     document.getElementById('sendBtn').disabled = false;
     document.getElementById('clearChatBtn').disabled = false;
+    document.getElementById('helpBtn').disabled = false;
     
-    // 加载K线数据
+    // 加载K线数据和聊天记录
     await loadKlineCharts();
     await loadChatHistory();
 }
@@ -450,47 +720,81 @@ async function loadKlineCharts() {
             fetch(`/api/stock/data/${currentStock.code}?period=weekly&days=52`)
         ]);
         
+        // 检查HTTP状态码
+        if (!minuteRes.ok || !dailyRes.ok || !weeklyRes.ok) {
+            throw new Error(`HTTP错误: minute=${minuteRes.status}, daily=${dailyRes.status}, weekly=${weeklyRes.status}`);
+        }
+        
         const minuteResult = await minuteRes.json();
         const dailyResult = await dailyRes.json();
         const weeklyResult = await weeklyRes.json();
         
+        // 打印详细日志
+        console.log('1分钟K线数据:', minuteResult);
+        console.log('日K线数据:', dailyResult);
+        console.log('周K线数据:', weeklyResult);
+        
         // 渲染图表
-        if (minuteResult.success && minuteResult.data.length > 0) {
+        if (minuteResult.success && minuteResult.data && minuteResult.data.length > 0) {
             renderKlineChart('minuteChart', minuteResult.data, '1分钟K线');
+        } else {
+            console.warn('1分钟K线无数据或失败:', minuteResult);
+            document.getElementById('minuteChart').innerHTML = '<div class="chart-placeholder">暂无数据，请点击"更新数据"</div>';
         }
         
-        if (dailyResult.success && dailyResult.data.length > 0) {
+        if (dailyResult.success && dailyResult.data && dailyResult.data.length > 0) {
             renderKlineChart('dailyChart', dailyResult.data, '日K线');
+        } else {
+            console.warn('日K线无数据或失败:', dailyResult);
+            document.getElementById('dailyChart').innerHTML = '<div class="chart-placeholder">暂无数据，请点击"更新数据"</div>';
         }
         
-        if (weeklyResult.success && weeklyResult.data.length > 0) {
+        if (weeklyResult.success && weeklyResult.data && weeklyResult.data.length > 0) {
             renderKlineChart('weeklyChart', weeklyResult.data, '周K线');
+        } else {
+            console.warn('周K线无数据或失败:', weeklyResult);
+            document.getElementById('weeklyChart').innerHTML = '<div class="chart-placeholder">暂无数据，请点击"更新数据"</div>';
         }
     } catch (error) {
         console.error('加载K线数据失败:', error);
-        showMessage('加载K线数据失败', 'error');
+        // 显示更详细的错误信息
+        showMessage('加载K线数据失败: ' + error.message, 'error');
     }
 }
 
 // 渲染K线图
 function renderKlineChart(containerId, data, title) {
+    // 检查ECharts是否可用
+    if (typeof echarts === 'undefined') {
+        console.error('ECharts未定义，无法渲染图表');
+        document.getElementById(containerId).innerHTML = 
+            '<div class="chart-placeholder" style="color: #f56c6c;">图表库加载失败，请刷新页面</div>';
+        return;
+    }
+    
     const container = document.getElementById(containerId);
-    const chart = echarts.init(container);
+    if (!container) {
+        console.error(`容器 ${containerId} 不存在`);
+        return;
+    }
     
-    // 准备数据
-    const dates = data.map(d => {
-        if (d.trade_time) {
-            // 分钟数据
-            const dt = new Date(d.trade_time);
-            return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-        } else {
-            // 日K/周K数据
-            return formatDate(d.trade_date);
-        }
-    });
-    
-    const ohlc = data.map(d => [d.open, d.close, d.low, d.high]);
-    const volumes = data.map(d => d.volume || 0);
+    try {
+        const chart = echarts.init(container);
+        
+        // 准备数据
+        const dates = data.map(d => {
+            if (d.trade_time) {
+                // 分钟数据
+                const dt = new Date(d.trade_time);
+                return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+            } else {
+                // 日K/周K数据
+                return formatDate(d.trade_date);
+            }
+        });
+        
+        const ohlc = data.map(d => [d.open, d.close, d.low, d.high]);
+        const volumes = data.map(d => d.volume || 0);
     
     // 配置项
     const option = {
@@ -650,6 +954,11 @@ function renderKlineChart(containerId, data, title) {
             });
         }
     });
+    } catch (error) {
+        console.error('渲染K线图失败:', error);
+        document.getElementById(containerId).innerHTML = 
+            '<div class="chart-placeholder" style="color: #f56c6c;">图表渲染失败: ' + error.message + '</div>';
+    }
 }
 
 
@@ -743,7 +1052,13 @@ async function loadChatHistory() {
             // 滚动到底部
             container.scrollTop = container.scrollHeight;
         } else {
-            container.innerHTML = '<div class="empty-state">暂无对话记录</div>';
+            // 对话为空，显示模版选择按钮
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p style="margin-bottom: 1rem;">暂无对话记录</p>
+                    <button class="btn btn-primary" onclick="showTemplateSelector()" id="selectTemplateBtn">选择对话模版</button>
+                </div>
+            `;
         }
     } catch (error) {
         console.error('加载聊天记录失败:', error);
@@ -774,19 +1089,36 @@ function formatDateTime(dateStr) {
 function renderMarkdown(content) {
     if (!content) return '';
     
-    // 配置marked选项
-    marked.setOptions({
-        breaks: true,        // 支持换行
-        gfm: true,          // 支持GitHub风格的Markdown
-        headerIds: false,   // 不生成header id
-        mangle: false       // 不混淆邮箱地址
-    });
+    // 检查marked是否加载成功
+    if (typeof marked === 'undefined') {
+        console.warn('⚠️ marked.js 未加载，使用纯文本显示');
+        // 使用纯文本，但保留换行
+        const escaped = escapeHtml(content);
+        const withBreaks = escaped.replace(/\n/g, '<br>');
+        return `<div class="markdown-content"><p>${withBreaks}</p></div>`;
+    }
     
-    // 渲染Markdown
-    const html = marked.parse(content);
-    
-    // 包裹在markdown-content类中
-    return `<div class="markdown-content">${html}</div>`;
+    try {
+        // 配置marked选项
+        marked.setOptions({
+            breaks: true,        // 支持换行
+            gfm: true,          // 支持GitHub风格的Markdown
+            headerIds: false,   // 不生成header id
+            mangle: false       // 不混淆邮箱地址
+        });
+        
+        // 渲染Markdown
+        const html = marked.parse(content);
+        
+        // 包裹在markdown-content类中
+        return `<div class="markdown-content">${html}</div>`;
+    } catch (error) {
+        console.error('❌ Markdown渲染失败:', error);
+        // 降级到纯文本
+        const escaped = escapeHtml(content);
+        const withBreaks = escaped.replace(/\n/g, '<br>');
+        return `<div class="markdown-content"><p>${withBreaks}</p></div>`;
+    }
 }
 
 // 发送消息
@@ -831,6 +1163,7 @@ async function sendMessage() {
     input.value = '';
     
     try {
+        console.log('📨 发送消息到API...');
         const response = await fetch('/api/chat/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -840,16 +1173,29 @@ async function sendMessage() {
             })
         });
         
+        console.log('📥 收到API响应, status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP错误! status: ${response.status}`);
+        }
+        
         const result = await response.json();
+        console.log('✅ API结果:', result);
+        
         if (result.success) {
+            // 删除临时消息
+            document.getElementById('temp-msg')?.remove();
+            console.log('🔄 重新加载聊天记录...');
             // 重新加载完整的聊天记录（包含真实的AI回复）
             await loadChatHistory();
+            console.log('✅ 聊天记录加载完成');
         } else {
             // 删除临时消息并显示错误
             document.getElementById('temp-msg')?.remove();
             showMessage(result.message, 'error');
         }
     } catch (error) {
+        console.error('❌ 发送消息失败:', error);
         // 删除临时消息并显示错误
         document.getElementById('temp-msg')?.remove();
         showMessage('发送失败: ' + error.message, 'error');
@@ -882,8 +1228,88 @@ async function clearChat() {
     }
 }
 
+// 显示变量帮助弹窗
+function showVariablesHelp() {
+    document.getElementById('variablesModal').style.display = 'block';
+}
+
+// 关闭变量帮助弹窗
+function closeVariablesModal() {
+    document.getElementById('variablesModal').style.display = 'none';
+}
+
+// 显示模版选择器
+async function showTemplateSelector() {
+    const modal = document.getElementById('templateModal');
+    modal.style.display = 'block';
+    
+    // 加载模版列表
+    try {
+        const response = await fetch('/api/templates');
+        const result = await response.json();
+        
+        const container = document.getElementById('templateList');
+        if (result.success && result.data.length > 0) {
+            container.innerHTML = result.data.map(tpl => `
+                <div class="template-item" onclick="selectTemplate(${tpl.id})">
+                    <div class="template-name">${escapeHtml(tpl.name)}</div>
+                    <div class="template-content">${escapeHtml(tpl.content)}</div>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div class="empty-state">暂无模版，请先在"对话模版"页面创建</div>';
+        }
+    } catch (error) {
+        showMessage('加载模版失败: ' + error.message, 'error');
+    }
+}
+
+// 关闭模版选择弹窗
+function closeTemplateModal() {
+    document.getElementById('templateModal').style.display = 'none';
+}
+
+// 选择模版并填充
+async function selectTemplate(templateId) {
+    try {
+        const response = await fetch('/api/templates');
+        const result = await response.json();
+        
+        if (result.success) {
+            const template = result.data.find(t => t.id === templateId);
+            if (template) {
+                document.getElementById('chatInput').value = template.content;
+                closeTemplateModal();
+                showMessage('模版已填充到输入框');
+            }
+        }
+    } catch (error) {
+        showMessage('加载模版失败: ' + error.message, 'error');
+    }
+}
+
+// 点击模态框外部关闭
+window.onclick = function(event) {
+    const variablesModal = document.getElementById('variablesModal');
+    const templateModal = document.getElementById('templateModal');
+    
+    if (event.target === variablesModal) {
+        closeVariablesModal();
+    }
+    if (event.target === templateModal) {
+        closeTemplateModal();
+    }
+}
+
 // 页面加载完成
 document.addEventListener('DOMContentLoaded', () => {
+    // 检查ECharts是否加载
+    if (typeof echarts === 'undefined') {
+        showMessage('图表库加载失败，请刷新页面重试', 'error');
+        console.error('ECharts未定义，可能CDN加载失败');
+        return;
+    }
+    
     loadWatchlist();
     
     // 回车换行，Shift+回车发送消息

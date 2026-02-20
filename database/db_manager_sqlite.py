@@ -81,14 +81,54 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # 自选股表
+            # 自选股表（多用户支持）
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS watchlist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                stock_code TEXT NOT NULL UNIQUE,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                stock_code TEXT NOT NULL,
                 stock_name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, stock_code)
             )
+            """)
+            
+            # 检查并添加user_id字段（兼容旧数据库）
+            cursor.execute("PRAGMA table_info(watchlist)")
+            columns = [col['name'] for col in cursor.fetchall()]
+            
+            if 'user_id' not in columns:
+                print("  - watchlist表缺少user_id字段，正在添加...")
+                cursor.execute("""
+                ALTER TABLE watchlist ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1
+                """)
+                print("  - watchlist表user_id字段添加完成")
+                
+                # 删除旧的唯一约束，重建新的
+                # SQLite不支持直接修改约束，需要重建表
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS watchlist_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    stock_code TEXT NOT NULL,
+                    stock_name TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, stock_code)
+                )
+                """)
+                
+                cursor.execute("""
+                INSERT INTO watchlist_new (id, user_id, stock_code, stock_name, created_at)
+                SELECT id, user_id, stock_code, stock_name, created_at FROM watchlist
+                """)
+                
+                cursor.execute("DROP TABLE watchlist")
+                cursor.execute("ALTER TABLE watchlist_new RENAME TO watchlist")
+                print("  - watchlist表唯一约束已更新")
+            
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_watchlist_user_id 
+            ON watchlist(user_id)
             """)
             
             cursor.execute("""
@@ -192,45 +232,155 @@ class DatabaseManager:
             ON stock_indicators(ts_code)
             """)
             
-            # 持仓数据表
+            # 持仓数据表（添加user_id）
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS positions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                stock_code TEXT NOT NULL UNIQUE,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                stock_code TEXT NOT NULL,
                 stock_name TEXT,
                 quantity INTEGER NOT NULL DEFAULT 0,
                 cost_price REAL NOT NULL,
                 current_price REAL,
                 profit_loss REAL,
                 profit_loss_pct REAL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, stock_code)
             )
             """)
             
-            # 现金余额表
+            # 检查并添加user_id字段（兼容旧数据库）
+            cursor.execute("PRAGMA table_info(positions)")
+            columns = [col['name'] for col in cursor.fetchall()]
+            
+            if 'user_id' not in columns:
+                print("  - positions表缺少user_id字段，正在添加...")
+                cursor.execute("""
+                ALTER TABLE positions ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1
+                """)
+                print("  - positions表user_id字段添加完成")
+                
+                # 重建表以更新唯一约束
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS positions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    stock_code TEXT NOT NULL,
+                    stock_name TEXT,
+                    quantity INTEGER NOT NULL DEFAULT 0,
+                    cost_price REAL NOT NULL,
+                    current_price REAL,
+                    profit_loss REAL,
+                    profit_loss_pct REAL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, stock_code)
+                )
+                """)
+                
+                cursor.execute("""
+                INSERT INTO positions_new (id, user_id, stock_code, stock_name, quantity, cost_price, current_price, profit_loss, profit_loss_pct, updated_at)
+                SELECT id, user_id, stock_code, stock_name, quantity, cost_price, current_price, profit_loss, profit_loss_pct, updated_at FROM positions
+                """)
+                
+                cursor.execute("DROP TABLE positions")
+                cursor.execute("ALTER TABLE positions_new RENAME TO positions")
+                print("  - positions表唯一约束已更新")
+            
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_positions_user_id 
+            ON positions(user_id)
+            """)
+            
+            # 现金余额表（添加user_id）
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS cash_balance (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 1,
                 balance REAL NOT NULL DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id)
             )
             """)
             
-            # 初始化现金余额
+            # 检查并添加user_id字段（兼容旧数据库）
+            cursor.execute("PRAGMA table_info(cash_balance)")
+            columns = [col['name'] for col in cursor.fetchall()]
+            
+            if 'user_id' not in columns:
+                print("  - cash_balance表缺少user_id字段，正在添加...")
+                cursor.execute("""
+                ALTER TABLE cash_balance ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1
+                """)
+                print("  - cash_balance表user_id字段添加完成")
+                
+                # 重建表以添加唯一约束
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cash_balance_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    balance REAL NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id)
+                )
+                """)
+                
+                cursor.execute("""
+                INSERT INTO cash_balance_new (id, user_id, balance, updated_at)
+                SELECT id, user_id, balance, updated_at FROM cash_balance
+                """)
+                
+                cursor.execute("DROP TABLE cash_balance")
+                cursor.execute("ALTER TABLE cash_balance_new RENAME TO cash_balance")
+                print("  - cash_balance表唯一约束已更新")
+            
+            # 初始化现金余额（为admin用户）
             cursor.execute("""
-            INSERT OR IGNORE INTO cash_balance (id, balance) 
+            INSERT OR IGNORE INTO cash_balance (user_id, balance) 
             VALUES (1, 0)
             """)
             
-            # AI对话记录表
+            # 用户表
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_username 
+            ON users(username)
+            """)
+            
+            # AI对话记录表（添加user_id）
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS chat_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 1,
                 stock_code TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+            """)
+            
+            # 检查并添加user_id字段（兼容旧数据库）
+            cursor.execute("PRAGMA table_info(chat_history)")
+            columns = [col['name'] for col in cursor.fetchall()]
+            
+            if 'user_id' not in columns:
+                print("  - chat_history表缺少user_id字段，正在添加...")
+                cursor.execute("""
+                ALTER TABLE chat_history ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1
+                """)
+                print("  - chat_history表user_id字段添加完成")
+            
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_chat_history_user_id 
+            ON chat_history(user_id)
             """)
             
             cursor.execute("""

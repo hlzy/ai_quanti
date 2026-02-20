@@ -3,3 +3,16 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+
+# 忽略日志文件
+log/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# 环境配置
+.env

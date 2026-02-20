@@ -135,10 +135,11 @@ class DatabaseManager:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
                 
-                # 持仓数据表
+                # 持仓数据表（添加user_id）
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS positions (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL DEFAULT 1,
                     stock_code VARCHAR(20) NOT NULL,
                     stock_name VARCHAR(100),
                     quantity INT NOT NULL DEFAULT 0,
@@ -147,30 +148,47 @@ class DatabaseManager:
                     profit_loss DECIMAL(15, 2),
                     profit_loss_pct DECIMAL(10, 2),
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE KEY uk_stock_code (stock_code)
+                    UNIQUE KEY uk_user_stock (user_id, stock_code),
+                    INDEX idx_user_id (user_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
                 
-                # 现金余额表
+                # 现金余额表（添加user_id）
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cash_balance (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL DEFAULT 1,
                     balance DECIMAL(15, 2) NOT NULL DEFAULT 0,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_user_id (user_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
                 
                 # 初始化现金余额
                 cursor.execute("INSERT IGNORE INTO cash_balance (id, balance) VALUES (1, 0)")
                 
-                # AI对话记录表
+                # 用户表
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL UNIQUE,
+                    password_hash VARCHAR(64) NOT NULL,
+                    role VARCHAR(20) NOT NULL DEFAULT 'user',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_username (username)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                
+                # AI对话记录表（添加user_id）
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS chat_history (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL DEFAULT 1,
                     stock_code VARCHAR(20) NOT NULL,
                     role VARCHAR(20) NOT NULL,
                     content TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_user_id (user_id),
                     INDEX idx_stock_code (stock_code),
                     INDEX idx_created_at (created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

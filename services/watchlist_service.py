@@ -3,60 +3,62 @@
 """
 from database import db_manager
 from services.stock_service import stock_service
+from utils.logger import watchlist_logger
 
 
 class WatchlistService:
     """自选股服务类"""
     
-    def get_all_watchlist(self):
-        """获取所有自选股"""
-        query = "SELECT * FROM watchlist ORDER BY created_at DESC"
-        return db_manager.execute_query(query)
+    def get_all_watchlist(self, user_id):
+        """获取指定用户的所有自选股"""
+        query = "SELECT * FROM watchlist WHERE user_id = %s ORDER BY created_at DESC"
+        return db_manager.execute_query(query, (user_id,))
     
-    def add_to_watchlist(self, stock_code):
-        """添加到自选股"""
-        # 获取股票信息
-        stock_info = stock_service.get_stock_info(stock_code)
+    def add_to_watchlist(self, user_id, stock_code, stock_name=None):
+        """添加到自选股
         
-        if not stock_info:
-            return False
-        
-        ts_code = stock_info['ts_code']
-        stock_name = stock_info.get('name', '')
-        
-        # 兼容MySQL和SQLite的语法
-        from config import config
-        if config.DATABASE_TYPE == 'sqlite':
-            # SQLite使用INSERT OR REPLACE
-            query = """
-            INSERT OR REPLACE INTO watchlist (stock_code, stock_name)
-            VALUES (%s, %s)
-            """
+        Args:
+            user_id: 用户ID
+            stock_code: 股票代码
+            stock_name: 股票名称（可选，如果不提供则自动获取）
+        """
+        # 如果没有提供股票名称，获取股票信息
+        if not stock_name:
+            stock_info = stock_service.get_stock_info(stock_code)
+            if not stock_info:
+                return False
+            ts_code = stock_info['ts_code']
+            stock_name = stock_info.get('name', '')
         else:
-            # MySQL使用ON DUPLICATE KEY UPDATE
-            query = """
-            INSERT INTO watchlist (stock_code, stock_name)
-            VALUES (%s, %s)
-            ON DUPLICATE KEY UPDATE stock_name = VALUES(stock_name)
-            """
+            # 使用提供的名称，但仍需要获取ts_code
+            stock_info = stock_service.get_stock_info(stock_code)
+            if not stock_info:
+                return False
+            ts_code = stock_info['ts_code']
         
-        result = db_manager.execute_update(query, (ts_code, stock_name))
+        # SQLite使用INSERT OR IGNORE（避免重复添加）
+        query = """
+        INSERT OR IGNORE INTO watchlist (user_id, stock_code, stock_name)
+        VALUES (?, ?, ?)
+        """
         
-        # 更新股票数据
+        result = db_manager.execute_update(query, (user_id, ts_code, stock_name))
+        
+        # 如果是新添加的，更新股票数据
         if result:
             stock_service.update_stock_data(ts_code)
         
-        return result > 0
+        return True
     
-    def remove_from_watchlist(self, stock_code):
+    def remove_from_watchlist(self, user_id, stock_code):
         """从自选股移除"""
-        query = "DELETE FROM watchlist WHERE stock_code = %s"
-        return db_manager.execute_update(query, (stock_code,))
+        query = "DELETE FROM watchlist WHERE user_id = %s AND stock_code = %s"
+        return db_manager.execute_update(query, (user_id, stock_code))
     
-    def is_in_watchlist(self, stock_code):
+    def is_in_watchlist(self, user_id, stock_code):
         """检查是否在自选股中"""
-        query = "SELECT COUNT(*) as count FROM watchlist WHERE stock_code = %s"
-        result = db_manager.execute_query(query, (stock_code,), fetch_one=True)
+        query = "SELECT COUNT(*) as count FROM watchlist WHERE user_id = %s AND stock_code = %s"
+        result = db_manager.execute_query(query, (user_id, stock_code), fetch_one=True)
         return result['count'] > 0
 
 

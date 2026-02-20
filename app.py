@@ -1,41 +1,224 @@
 """
 Flask主应用
 """
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
+from functools import wraps
 from config import config
 from database import db_manager
 from services import stock_service, position_service, ai_service, template_service
 from services.watchlist_service import watchlist_service
 from services.scheduler_service import scheduler_service
 from services.db_browser_service import db_browser_service
+from services.user_service import user_service
+from utils.logger import app_logger
 import traceback
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.SECRET_KEY
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24小时
 CORS(app)
+
+app_logger.info("Flask应用启动成功")
+
+
+# ========== 认证装饰器 ==========
+def login_required(f):
+    """登录验证装饰器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            if request.is_json:
+                return jsonify({'success': False, 'message': '请先登录'}), 401
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def admin_required(f):
+    """管理员验证装饰器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            if request.is_json:
+                return jsonify({'success': False, 'message': '请先登录'}), 401
+            return redirect(url_for('login_page'))
+        
+        if session.get('role') != 'admin':
+            if request.is_json:
+                return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+            return jsonify({'error': '需要管理员权限'}), 403
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ========== 认证路由 ==========
+@app.route('/login')
+def login_page():
+    """登录页面"""
+    # 如果已登录，根据角色跳转
+    if 'user_id' in session:
+        if session.get('role') == 'admin':
+            return redirect(url_for('admin_page'))
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    """退出登录"""
+    session.clear()
+    return redirect(url_for('login_page'))
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """用户登录"""
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'success': False, 'message': '用户名和密码不能为空'})
+        
+        user = user_service.authenticate(username, password)
+        
+        if user:
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['role'] = user['role']
+            session.permanent = True
+            
+            return jsonify({
+                'success': True,
+                'message': '登录成功',
+                'user': {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'role': user['role']
+                }
+            })
+        else:
+            return jsonify({'success': False, 'message': '用户名或密码错误'})
+    except Exception as e:
+        app_logger.error(f"登录失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'登录失败: {str(e)}'})
+
+
+@app.route('/api/auth/current_user')
+@login_required
+def get_current_user():
+    """获取当前登录用户信息"""
+    return jsonify({
+        'id': session.get('user_id'),
+        'username': session.get('username'),
+        'role': session.get('role')
+    })
+
+
+@app.route('/api/auth/change_password', methods=['POST'])
+@login_required
+def change_password():
+    """修改密码"""
+    try:
+        data = request.json
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        
+        if not old_password or not new_password:
+            return jsonify({'success': False, 'message': '旧密码和新密码不能为空'})
+        
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'message': '新密码至少6位'})
+        
+        result = user_service.change_password(
+            session['user_id'], 
+            old_password, 
+            new_password
+        )
+        return jsonify(result)
+    except Exception as e:
+        app_logger.error(f"修改密码失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'修改失败: {str(e)}'})
+
+
+# ========== 管理员路由 ==========
+@app.route('/admin')
+@admin_required
+def admin_page():
+    """管理员界面"""
+    return render_template('admin.html')
+
+
+@app.route('/api/admin/users', methods=['GET'])
+@admin_required
+def get_users():
+    """获取所有用户"""
+    users = user_service.get_all_users()
+    return jsonify(users)
+
+
+@app.route('/api/admin/users', methods=['POST'])
+@admin_required
+def create_user():
+    """创建新用户"""
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        role = data.get('role', 'user')
+        
+        if not username or not password:
+            return jsonify({'success': False, 'message': '用户名和密码不能为空'})
+        
+        if len(password) < 6:
+            return jsonify({'success': False, 'message': '密码至少6位'})
+        
+        result = user_service.create_user(username, password, role)
+        return jsonify(result)
+    except Exception as e:
+        app_logger.error(f"创建用户失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'创建失败: {str(e)}'})
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_user(user_id):
+    """删除用户"""
+    try:
+        result = user_service.delete_user(user_id)
+        return jsonify(result)
+    except Exception as e:
+        app_logger.error(f"删除用户失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})
 
 
 # ========== 主页路由 ==========
 @app.route('/')
+@login_required
 def index():
     """股票分析主界面"""
     return render_template('index.html')
 
 
 @app.route('/positions')
+@login_required
 def positions_page():
     """持仓管理界面"""
     return render_template('positions.html')
 
 
 @app.route('/templates')
+@login_required
 def templates_page():
     """对话模版管理界面"""
     return render_template('templates.html')
 
 
 @app.route('/database')
+@login_required
 def database_page():
     """数据库浏览界面"""
     return render_template('database.html')
@@ -43,26 +226,30 @@ def database_page():
 
 # ========== 自选股API ==========
 @app.route('/api/watchlist', methods=['GET'])
+@login_required
 def get_watchlist():
     """获取自选股列表"""
     try:
-        watchlist = watchlist_service.get_all_watchlist()
+        user_id = session['user_id']
+        watchlist = watchlist_service.get_all_watchlist(user_id)
         return jsonify({'success': True, 'data': watchlist})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/watchlist', methods=['POST'])
+@login_required
 def add_watchlist():
     """添加自选股"""
     try:
+        user_id = session['user_id']
         data = request.json
         stock_code = data.get('stock_code')
         
         if not stock_code:
             return jsonify({'success': False, 'message': '股票代码不能为空'}), 400
         
-        result = watchlist_service.add_to_watchlist(stock_code)
+        result = watchlist_service.add_to_watchlist(user_id, stock_code)
         if result:
             return jsonify({'success': True, 'message': '添加成功'})
         else:
@@ -73,10 +260,12 @@ def add_watchlist():
 
 
 @app.route('/api/watchlist/<stock_code>', methods=['DELETE'])
+@login_required
 def delete_watchlist(stock_code):
     """删除自选股"""
     try:
-        result = watchlist_service.remove_from_watchlist(stock_code)
+        user_id = session['user_id']
+        result = watchlist_service.remove_from_watchlist(user_id, stock_code)
         if result:
             return jsonify({'success': True, 'message': '删除成功'})
         else:
@@ -87,6 +276,7 @@ def delete_watchlist(stock_code):
 
 # ========== 股票数据API ==========
 @app.route('/api/stock/info/<stock_code>', methods=['GET'])
+@login_required
 def get_stock_info(stock_code):
     """获取股票基本信息"""
     try:
@@ -100,6 +290,7 @@ def get_stock_info(stock_code):
 
 
 @app.route('/api/stock/data/<stock_code>', methods=['GET'])
+@login_required
 def get_stock_data(stock_code):
     """获取股票K线数据（仅从数据库读取，不触发API调用）"""
     try:
@@ -116,6 +307,7 @@ def get_stock_data(stock_code):
 
 
 @app.route('/api/stock/indicators/<stock_code>', methods=['GET'])
+@login_required
 def get_stock_indicators(stock_code):
     """获取股票技术指标"""
     try:
@@ -128,6 +320,7 @@ def get_stock_indicators(stock_code):
 
 
 @app.route('/api/stock/update/<stock_code>', methods=['POST'])
+@login_required
 def update_stock_data(stock_code):
     """更新股票数据"""
     try:
@@ -143,39 +336,53 @@ def update_stock_data(stock_code):
 
 # ========== AI对话API ==========
 @app.route('/api/chat/history/<stock_code>', methods=['GET'])
+@login_required
 def get_chat_history(stock_code):
     """获取聊天记录"""
     try:
-        history = ai_service.get_chat_history(stock_code)
+        user_id = session['user_id']
+        history = ai_service.get_chat_history(user_id, stock_code)
         return jsonify({'success': True, 'data': history})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/chat/send', methods=['POST'])
+@login_required
 def send_chat():
     """发送聊天消息"""
     try:
+        user_id = session['user_id']
+        username = session['username']
         data = request.json
         stock_code = data.get('stock_code')
         message = data.get('message')
+        
+        print(f"📨 收到聊天请求 - user_id: {user_id}, username: {username}, stock_code: {stock_code}")
         
         if not stock_code or not message:
             return jsonify({'success': False, 'message': '参数不完整'}), 400
         
         # 带历史记录的对话
-        response = ai_service.chat_with_history(stock_code, message)
+        print(f"🤖 开始调用AI服务...")
+        response = ai_service.chat_with_history(user_id, username, stock_code, message)
+        print(f"✅ AI响应完成，响应长度: {len(response) if response else 0}")
         
-        return jsonify({'success': True, 'data': {'response': response}})
+        result = jsonify({'success': True, 'data': {'response': response}})
+        print(f"📤 返回结果: success=True, response长度={len(response) if response else 0}")
+        return result
     except Exception as e:
+        print(f"❌ 聊天API异常: {e}")
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/chat/analyze/<stock_code>', methods=['POST'])
+@login_required
 def analyze_stock(stock_code):
     """分析股票并生成策略"""
     try:
+        user_id = session['user_id']
         # 获取股票数据
         stock_info = stock_service.get_stock_info(stock_code)
         if not stock_info:
@@ -202,8 +409,8 @@ def analyze_stock(stock_code):
         
         # 保存对话记录
         if user_message:
-            ai_service.save_chat_history(stock_code, 'user', user_message)
-        ai_service.save_chat_history(stock_code, 'assistant', analysis)
+            ai_service.save_chat_history(user_id, stock_code, 'user', user_message)
+        ai_service.save_chat_history(user_id, stock_code, 'assistant', analysis)
         
         # 生成指标摘要
         latest = indicators[-1]
@@ -234,10 +441,13 @@ EMA(12): {latest['ema_12']:.2f}, EMA(26): {latest['ema_26']:.2f}
 
 
 @app.route('/api/chat/clear/<stock_code>', methods=['DELETE'])
+@login_required
 def clear_chat_history(stock_code):
     """清除聊天记录"""
     try:
-        ai_service.clear_chat_history(stock_code)
+        user_id = session['user_id']
+        username = session['username']
+        ai_service.clear_chat_history(user_id, username, stock_code)
         return jsonify({'success': True, 'message': '聊天记录已清除'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -245,29 +455,33 @@ def clear_chat_history(stock_code):
 
 # ========== 持仓管理API ==========
 @app.route('/api/positions', methods=['GET'])
+@login_required
 def get_positions():
     """获取所有持仓"""
     try:
-        summary = position_service.get_portfolio_summary()
+        user_id = session['user_id']
+        summary = position_service.get_portfolio_summary(user_id)
         return jsonify({'success': True, 'data': summary})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/positions', methods=['POST'])
+@login_required
 def add_position():
     """添加或更新持仓"""
     try:
+        user_id = session['user_id']
         data = request.json
         stock_code = data.get('stock_code')
-        stock_name = data.get('stock_name')
+        stock_name = data.get('stock_name')  # 可选
         quantity = int(data.get('quantity', 0))
         cost_price = float(data.get('cost_price', 0))
         
         if not stock_code or quantity <= 0 or cost_price <= 0:
             return jsonify({'success': False, 'message': '参数无效'}), 400
         
-        result = position_service.add_or_update_position(stock_code, stock_name, quantity, cost_price)
+        result = position_service.add_or_update_position(user_id, stock_code, stock_name, quantity, cost_price)
         if result:
             return jsonify({'success': True, 'message': '操作成功'})
         else:
@@ -278,10 +492,12 @@ def add_position():
 
 
 @app.route('/api/positions/<stock_code>', methods=['DELETE'])
+@login_required
 def delete_position(stock_code):
     """删除持仓"""
     try:
-        result = position_service.delete_position(stock_code)
+        user_id = session['user_id']
+        result = position_service.delete_position(user_id, stock_code)
         if result:
             return jsonify({'success': True, 'message': '删除成功'})
         else:
@@ -291,36 +507,42 @@ def delete_position(stock_code):
 
 
 @app.route('/api/positions/update-prices', methods=['POST'])
+@login_required
 def update_positions_prices():
     """更新所有持仓价格"""
     try:
-        position_service.update_all_positions_price()
+        user_id = session['user_id']
+        position_service.update_all_positions_price(user_id)
         return jsonify({'success': True, 'message': '价格更新成功'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/cash', methods=['GET'])
+@login_required
 def get_cash():
     """获取现金余额"""
     try:
-        balance = position_service.get_cash_balance()
+        user_id = session['user_id']
+        balance = position_service.get_cash_balance(user_id)
         return jsonify({'success': True, 'data': {'balance': float(balance)}})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/cash', methods=['PUT'])
+@login_required
 def update_cash():
     """更新现金余额"""
     try:
+        user_id = session['user_id']
         data = request.json
         balance = float(data.get('balance', 0))
         
         if balance < 0:
             return jsonify({'success': False, 'message': '余额不能为负'}), 400
         
-        result = position_service.update_cash_balance(balance)
+        result = position_service.update_cash_balance(user_id, balance)
         if result:
             return jsonify({'success': True, 'message': '更新成功'})
         else:

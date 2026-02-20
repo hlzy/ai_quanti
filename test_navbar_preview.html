@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导航栏预览</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #f5f7fa;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .navbar h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .navbar-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .user-name {
+            color: white;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .user-name::before {
+            content: '👤';
+            font-size: 1.2rem;
+        }
+        
+        .role-badge {
+            background: rgba(255, 255, 255, 0.3);
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .logout-btn {
+            color: white;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+        
+        .demo-section {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem 2rem;
+        }
+        
+        .demo-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .demo-card h2 {
+            margin-bottom: 1rem;
+            color: #333;
+            font-size: 1.2rem;
+        }
+        
+        .demo-card ul {
+            margin-left: 1.5rem;
+            color: #666;
+            line-height: 2;
+        }
+    </style>
+</head>
+<body>
+    <!-- 管理员导航栏示例 -->
+    <nav class="navbar">
+        <h1>🚀 AI量化股票分析工具</h1>
+        <div class="navbar-content">
+            <div class="nav-links">
+                <a href="#" class="active">股票分析</a>
+                <a href="#">持仓管理</a>
+                <a href="#">对话模版</a>
+                <a href="#">数据库浏览</a>
+                <a href="#">用户管理</a>
+            </div>
+            
+            <div class="user-info">
+                <div class="user-name">
+                    admin
+                    <span class="role-badge">管理员</span>
+                </div>
+                <a href="#" class="logout-btn">退出登录</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="demo-section">
+        <div class="demo-card">
+            <h2>✅ 新增功能</h2>
+            <ul>
+                <li><strong>用户信息显示</strong>：右上角显示当前登录用户名</li>
+                <li><strong>角色标识</strong>：管理员显示"管理员"徽章，普通用户显示"用户"徽章</li>
+                <li><strong>退出登录</strong>：一键退出当前账户</li>
+                <li><strong>用户管理入口</strong>：管理员可见"用户管理"菜单项</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- 普通用户导航栏示例 -->
+    <nav class="navbar">
+        <h1>🚀 AI量化股票分析工具</h1>
+        <div class="navbar-content">
+            <div class="nav-links">
+                <a href="#" class="active">股票分析</a>
+                <a href="#">持仓管理</a>
+                <a href="#">对话模版</a>
+                <a href="#">数据库浏览</a>
+            </div>
+            
+            <div class="user-info">
+                <div class="user-name">
+                    张三
+                    <span class="role-badge">用户</span>
+                </div>
+                <a href="#" class="logout-btn">退出登录</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="demo-section">
+        <div class="demo-card">
+            <h2>👥 普通用户视图</h2>
+            <ul>
+                <li>显示用户名和"用户"徽章</li>
+                <li>没有"用户管理"菜单项</li>
+                <li>可以正常使用其他功能</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟退出登录
+        document.querySelectorAll('.logout-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (confirm('确定要退出登录吗？')) {
+                    alert('已退出登录（这是预览页面）');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
