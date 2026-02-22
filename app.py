@@ -27,8 +27,11 @@ def login_required(f):
     """登录验证装饰器"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 检查是否是API请求（路径以/api/开头或Accept header包含json）
+        is_api = request.path.startswith('/api/') or 'application/json' in request.headers.get('Accept', '')
+        
         if 'user_id' not in session:
-            if request.is_json:
+            if is_api:
                 return jsonify({'success': False, 'message': '请先登录'}), 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
@@ -39,13 +42,16 @@ def admin_required(f):
     """管理员验证装饰器"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 检查是否是API请求（路径以/api/开头或Accept header包含json）
+        is_api = request.path.startswith('/api/') or 'application/json' in request.headers.get('Accept', '')
+        
         if 'user_id' not in session:
-            if request.is_json:
+            if is_api:
                 return jsonify({'success': False, 'message': '请先登录'}), 401
             return redirect(url_for('login_page'))
         
         if session.get('role') != 'admin':
-            if request.is_json:
+            if is_api:
                 return jsonify({'success': False, 'message': '需要管理员权限'}), 403
             return jsonify({'error': '需要管理员权限'}), 403
         
@@ -152,6 +158,13 @@ def admin_page():
     return render_template('admin.html')
 
 
+@app.route('/models')
+@admin_required
+def models_page():
+    """模型管理界面"""
+    return render_template('models.html')
+
+
 @app.route('/api/admin/users', methods=['GET'])
 @admin_required
 def get_users():
@@ -192,6 +205,90 @@ def delete_user(user_id):
         return jsonify(result)
     except Exception as e:
         app_logger.error(f"删除用户失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})
+
+
+@app.route('/api/admin/models', methods=['GET'])
+@admin_required
+def get_models():
+    """获取所有AI模型配置"""
+    try:
+        query = """
+        SELECT id, model_id, model_name, is_enabled, display_order, supports_vision, created_at, updated_at
+        FROM ai_models 
+        ORDER BY display_order, id
+        """
+        models = db_manager.execute_query(query)
+        return jsonify({'success': True, 'data': models})
+    except Exception as e:
+        app_logger.error(f"获取模型列表失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'获取失败: {str(e)}'})
+
+
+@app.route('/api/admin/models', methods=['POST'])
+@admin_required
+def add_model():
+    """添加新模型"""
+    try:
+        data = request.json
+        model_id = data.get('model_id')
+        model_name = data.get('model_name')
+        display_order = data.get('display_order', 0)
+        supports_vision = data.get('supports_vision', 0)
+        
+        if not model_id or not model_name:
+            return jsonify({'success': False, 'message': '模型ID和名称不能为空'})
+        
+        query = """
+        INSERT INTO ai_models (model_id, model_name, is_enabled, display_order, supports_vision) 
+        VALUES (%s, %s, 1, %s, %s)
+        """
+        db_manager.execute_update(query, (model_id, model_name, display_order, supports_vision))
+        
+        app_logger.info(f"添加模型成功: {model_id}")
+        return jsonify({'success': True, 'message': '添加成功'})
+    except Exception as e:
+        app_logger.error(f"添加模型失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'添加失败: {str(e)}'})
+
+
+@app.route('/api/admin/models/<int:model_id>', methods=['PUT'])
+@admin_required
+def update_model(model_id):
+    """更新模型配置"""
+    try:
+        data = request.json
+        model_name = data.get('model_name')
+        is_enabled = data.get('is_enabled', 1)
+        display_order = data.get('display_order', 0)
+        supports_vision = data.get('supports_vision', 0)
+        
+        query = """
+        UPDATE ai_models 
+        SET model_name = %s, is_enabled = %s, display_order = %s, supports_vision = %s, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = %s
+        """
+        db_manager.execute_update(query, (model_name, is_enabled, display_order, supports_vision, model_id))
+        
+        app_logger.info(f"更新模型成功: ID={model_id}")
+        return jsonify({'success': True, 'message': '更新成功'})
+    except Exception as e:
+        app_logger.error(f"更新模型失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'更新失败: {str(e)}'})
+
+
+@app.route('/api/admin/models/<int:model_id>', methods=['DELETE'])
+@admin_required
+def delete_model(model_id):
+    """删除模型"""
+    try:
+        query = "DELETE FROM ai_models WHERE id = %s"
+        db_manager.execute_update(query, (model_id,))
+        
+        app_logger.info(f"删除模型成功: ID={model_id}")
+        return jsonify({'success': True, 'message': '删除成功'})
+    except Exception as e:
+        app_logger.error(f"删除模型失败: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})
 
 
@@ -334,7 +431,32 @@ def update_stock_data(stock_code):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@app.route('/api/stock/realtime/<stock_code>', methods=['GET'])
+@login_required
+def get_realtime_price(stock_code):
+    """获取股票实时价格"""
+    try:
+        price_data = stock_service.get_realtime_price(stock_code)
+        if price_data:
+            return jsonify({'success': True, 'data': price_data})
+        else:
+            return jsonify({'success': False, 'message': '暂无实时价格数据'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ========== AI对话API ==========
+@app.route('/api/chat/models', methods=['GET'])
+@login_required
+def get_available_models():
+    """获取可用的AI模型列表"""
+    try:
+        models = ai_service.get_available_models()
+        return jsonify({'success': True, 'data': models})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/chat/history/<stock_code>', methods=['GET'])
 @login_required
 def get_chat_history(stock_code):
@@ -350,22 +472,27 @@ def get_chat_history(stock_code):
 @app.route('/api/chat/send', methods=['POST'])
 @login_required
 def send_chat():
-    """发送聊天消息"""
+    """发送聊天消息（支持图片）"""
     try:
         user_id = session['user_id']
         username = session['username']
         data = request.json
         stock_code = data.get('stock_code')
-        message = data.get('message')
+        message = data.get('message', '')  # 消息可以为空（只发图片）
+        model = data.get('model')  # 获取用户选择的模型
+        images = data.get('images', [])  # 获取图片列表（base64格式）
         
-        print(f"📨 收到聊天请求 - user_id: {user_id}, username: {username}, stock_code: {stock_code}")
+        print(f"📨 收到聊天请求 - user_id: {user_id}, username: {username}, stock_code: {stock_code}, model: {model}, images: {len(images) if images else 0}")
         
-        if not stock_code or not message:
-            return jsonify({'success': False, 'message': '参数不完整'}), 400
+        if not stock_code:
+            return jsonify({'success': False, 'message': '缺少股票代码'}), 400
         
-        # 带历史记录的对话
+        if not message and not images:
+            return jsonify({'success': False, 'message': '请输入消息或上传图片'}), 400
+        
+        # 带历史记录和图片的对话
         print(f"🤖 开始调用AI服务...")
-        response = ai_service.chat_with_history(user_id, username, stock_code, message)
+        response = ai_service.chat_with_history(user_id, username, stock_code, message, model=model, images=images)
         print(f"✅ AI响应完成，响应长度: {len(response) if response else 0}")
         
         result = jsonify({'success': True, 'data': {'response': response}})

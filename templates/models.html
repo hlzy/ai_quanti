@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}模型管理 - AI量化股票分析工具{% endblock %}
+
+{% block extra_css %}
+<style>
+    .btn-warning {
+        background: #f39c12;
+        color: white;
+    }
+    
+    .btn-warning:hover {
+        background: #e67e22;
+    }
+    
+    .badge-enabled {
+        background: #67c23a;
+        color: white;
+    }
+    
+    .badge-disabled {
+        background: #909399;
+        color: white;
+    }
+    
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        width: 90%;
+        max-width: 600px;
+    }
+    
+    .modal-header {
+        margin-bottom: 20px;
+    }
+    
+    .modal-header h3 {
+        color: #333;
+        font-size: 1.3rem;
+    }
+    
+    .modal-footer {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+    
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    thead {
+        background: #f8f9fa;
+    }
+    
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    
+    th {
+        font-weight: 600;
+        color: #555;
+    }
+    
+    .badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    
+    .actions {
+        display: flex;
+        gap: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>🤖 AI模型管理</h2>
+        <button class="btn btn-primary" onclick="showAddModelModal()">
+            ➕ 添加模型
+        </button>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>模型ID</th>
+                <th>模型名称</th>
+                <th>Vision支持</th>
+                <th>状态</th>
+                <th>排序</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="modelTableBody">
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px;">
+                    <div class="loading">加载中</div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- 添加模型模态框 -->
+<div id="addModelModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>添加新模型</h3>
+        </div>
+        <form id="addModelForm">
+            <div class="input-group">
+                <label>模型ID *</label>
+                <input type="text" id="newModelId" required placeholder="例如: deepseek/deepseek-chat">
+                <small style="color: #909399; display: block; margin-top: 5px;">
+                    请输入OpenRouter平台的模型ID，可在 <a href="https://openrouter.ai/docs/models" target="_blank">OpenRouter模型列表</a> 查询
+                </small>
+            </div>
+            <div class="input-group">
+                <label>模型名称 *</label>
+                <input type="text" id="newModelName" required placeholder="例如: DeepSeek Chat">
+            </div>
+            <div class="input-group">
+                <label>显示排序</label>
+                <input type="number" id="newDisplayOrder" value="0" min="0">
+                <small style="color: #909399; display: block; margin-top: 5px;">
+                    数字越小排序越靠前
+                </small>
+            </div>
+            <div class="input-group">
+                <label>支持Vision（图片输入）</label>
+                <select id="newSupportsVision">
+                    <option value="0">不支持</option>
+                    <option value="1">支持</option>
+                </select>
+                <small style="color: #909399; display: block; margin-top: 5px;">
+                    是否支持图片输入功能
+                </small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeAddModal()">取消</button>
+                <button type="submit" class="btn btn-primary">添加</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 编辑模型模态框 -->
+<div id="editModelModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>编辑模型</h3>
+        </div>
+        <form id="editModelForm">
+            <input type="hidden" id="editModelDbId">
+            <div class="input-group">
+                <label>模型ID</label>
+                <input type="text" id="editModelId" disabled style="background: #f5f5f5; cursor: not-allowed;">
+                <small style="color: #909399; display: block; margin-top: 5px;">
+                    模型ID不可修改
+                </small>
+            </div>
+            <div class="input-group">
+                <label>模型名称 *</label>
+                <input type="text" id="editModelName" required>
+            </div>
+            <div class="input-group">
+                <label>状态</label>
+                <select id="editIsEnabled">
+                    <option value="1">启用</option>
+                    <option value="0">禁用</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>显示排序</label>
+                <input type="number" id="editDisplayOrder" min="0">
+            </div>
+            <div class="input-group">
+                <label>支持Vision（图片输入）</label>
+                <select id="editSupportsVision">
+                    <option value="0">不支持</option>
+                    <option value="1">支持</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeEditModal()">取消</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    // 等待DOM加载完成
+    document.addEventListener('DOMContentLoaded', function() {
+        let models = [];
+        
+        // 加载模型列表
+        async function loadModels() {
+            try {
+                console.log('开始加载模型列表...');
+                const response = await fetch('/api/admin/models');
+                console.log('API响应状态:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error('HTTP错误: ' + response.status);
+                }
+                
+                const result = await response.json();
+                console.log('API响应数据:', result);
+                
+                if (!result.success) {
+                    showMessage(result.message || '加载失败', 'error');
+                    document.getElementById('modelTableBody').innerHTML = 
+                        '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #f56c6c;">加载失败: ' + 
+                        (result.message || '未知错误') + '</td></tr>';
+                    return;
+                }
+                
+                models = result.data || [];
+                console.log('成功加载模型数量:', models.length);
+                renderModels();
+            } catch (error) {
+                console.error('加载模型列表失败:', error);
+                showMessage('加载模型列表失败: ' + error.message, 'error');
+                document.getElementById('modelTableBody').innerHTML = 
+                    '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #f56c6c;">加载失败: ' + 
+                    error.message + '<br><small>请检查浏览器控制台获取详细信息</small></td></tr>';
+            }
+        }
+        
+        // 渲染模型列表
+        function renderModels() {
+            const tbody = document.getElementById('modelTableBody');
+            
+            if (models.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #909399;">暂无模型配置</td></tr>';
+                return;
+            }
+            
+            const rows = models.map(function(model) {
+                const statusClass = model.is_enabled ? 'enabled' : 'disabled';
+                const statusText = model.is_enabled ? '✓ 启用' : '✗ 禁用';
+                const visionText = model.supports_vision ? '✅ 支持' : '❌ 不支持';
+                const modelNameEscaped = String(model.model_name).replace(/'/g, "\\'");
+                
+                return '<tr>' +
+                    '<td>' + model.id + '</td>' +
+                    '<td><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">' + model.model_id + '</code></td>' +
+                    '<td><strong>' + model.model_name + '</strong></td>' +
+                    '<td>' + visionText + '</td>' +
+                    '<td><span class="badge badge-' + statusClass + '">' + statusText + '</span></td>' +
+                    '<td>' + model.display_order + '</td>' +
+                    '<td>' + formatDate(model.created_at) + '</td>' +
+                    '<td><div class="actions">' +
+                    '<button class="btn btn-warning btn-sm" onclick="window.showEditModal(' + model.id + ')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">编辑</button>' +
+                    '<button class="btn btn-danger btn-sm" onclick="window.deleteModel(' + model.id + ', \'' + modelNameEscaped + '\')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">删除</button>' +
+                    '</div></td>' +
+                    '</tr>';
+            });
+            
+            tbody.innerHTML = rows.join('');
+        }
+        
+        // 显示添加模型模态框
+        window.showAddModelModal = function() {
+            document.getElementById('addModelModal').style.display = 'flex';
+        };
+        
+        // 关闭添加模态框
+        function closeAddModal() {
+            document.getElementById('addModelModal').style.display = 'none';
+            document.getElementById('addModelForm').reset();
+        }
+        window.closeAddModal = closeAddModal;
+        
+        // 添加模型
+        document.getElementById('addModelForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const modelId = document.getElementById('newModelId').value.trim();
+            const modelName = document.getElementById('newModelName').value.trim();
+            const displayOrder = parseInt(document.getElementById('newDisplayOrder').value) || 0;
+            const supportsVision = parseInt(document.getElementById('newSupportsVision').value) || 0;
+            
+            if (!modelId || !modelName) {
+                showMessage('请填写完整信息', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/models', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model_id: modelId,
+                        model_name: modelName,
+                        display_order: displayOrder,
+                        supports_vision: supportsVision
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('添加成功', 'success');
+                    closeAddModal();
+                    loadModels();
+                } else {
+                    showMessage(result.message || '添加失败', 'error');
+                }
+            } catch (error) {
+                console.error('添加模型失败:', error);
+                showMessage('添加模型失败', 'error');
+            }
+        });
+        
+        // 显示编辑模态框
+        window.showEditModal = function(modelId) {
+            const model = models.find(function(m) { return m.id === modelId; });
+            if (!model) return;
+            
+            document.getElementById('editModelDbId').value = model.id;
+            document.getElementById('editModelId').value = model.model_id;
+            document.getElementById('editModelName').value = model.model_name;
+            document.getElementById('editIsEnabled').value = model.is_enabled;
+            document.getElementById('editDisplayOrder').value = model.display_order;
+            document.getElementById('editSupportsVision').value = model.supports_vision || 0;
+            
+            document.getElementById('editModelModal').style.display = 'flex';
+        };
+        
+        // 关闭编辑模态框
+        function closeEditModal() {
+            document.getElementById('editModelModal').style.display = 'none';
+            document.getElementById('editModelForm').reset();
+        }
+        window.closeEditModal = closeEditModal;
+        
+        // 编辑模型
+        document.getElementById('editModelForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const dbId = document.getElementById('editModelDbId').value;
+            const modelName = document.getElementById('editModelName').value.trim();
+            const isEnabled = parseInt(document.getElementById('editIsEnabled').value);
+            const displayOrder = parseInt(document.getElementById('editDisplayOrder').value) || 0;
+            const supportsVision = parseInt(document.getElementById('editSupportsVision').value) || 0;
+            
+            if (!modelName) {
+                showMessage('请填写模型名称', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/models/' + dbId, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model_name: modelName,
+                        is_enabled: isEnabled,
+                        display_order: displayOrder,
+                        supports_vision: supportsVision
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('更新成功', 'success');
+                    closeEditModal();
+                    loadModels();
+                } else {
+                    showMessage(result.message || '更新失败', 'error');
+                }
+            } catch (error) {
+                console.error('更新模型失败:', error);
+                showMessage('更新模型失败', 'error');
+            }
+        });
+        
+        // 删除模型
+        window.deleteModel = async function(modelId, modelName) {
+            if (!confirm('确定要删除模型"' + modelName + '"吗？此操作不可恢复！')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/models/' + modelId, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('删除成功', 'success');
+                    loadModels();
+                } else {
+                    showMessage(result.message || '删除失败', 'error');
+                }
+            } catch (error) {
+                console.error('删除模型失败:', error);
+                showMessage('删除模型失败', 'error');
+            }
+        };
+        
+        // 页面加载时获取模型列表
+        loadModels();
+    });
+{% endblock %}

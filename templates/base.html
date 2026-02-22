@@ -263,6 +263,7 @@
                 <a href="/database" class="{% if request.path == '/database' %}active{% endif %}">数据库浏览</a>
                 {% if session.get('role') == 'admin' %}
                 <a href="/admin" class="{% if request.path == '/admin' %}active{% endif %}">用户管理</a>
+                <a href="/models" class="{% if request.path == '/models' %}active{% endif %}">模型管理</a>
                 {% endif %}
             </div>
             

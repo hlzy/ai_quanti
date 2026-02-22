@@ -1,8 +1,8 @@
 """
 定时任务服务 - 自动更新股票数据
 按北京时间统一时间点触发：
-- 1分钟K线：每5分钟（12:00、12:05、12:10...）
-- 日K/周K：每天凌晨2点
+- 实时股价：每分钟更新
+- 日K/周K：每小时更新
 """
 from threading import Thread
 import time
@@ -17,8 +17,8 @@ class SchedulerService:
     def __init__(self):
         self.running = False
         self.thread = None
-        self.last_minute_trigger = None  # 上次分钟K触发时间
-        self.last_daily_trigger = None   # 上次日K触发时间
+        self.last_realtime_trigger = None  # 上次实时价格触发时间
+        self.last_hourly_trigger = None    # 上次小时触发时间
     
     def start(self):
         """启动定时任务"""
@@ -29,7 +29,7 @@ class SchedulerService:
         self.running = True
         self.thread = Thread(target=self._run_scheduler, daemon=True)
         self.thread.start()
-        print("✅ 定时任务已启动（按北京时间整点触发）")
+        print("✅ 定时任务已启动（实时股价：每分钟，日K/周K：每小时）")
     
     def stop(self):
         """停止定时任务"""
@@ -44,35 +44,35 @@ class SchedulerService:
             try:
                 now = datetime.now()
                 
-                # 检查是否到达整5分钟时刻（例如：12:00、12:05、12:10）
-                if self._is_five_minute_mark(now):
-                    if not self._is_same_minute(now, self.last_minute_trigger):
-                        print(f"\n⏰ 触发时间点: {now.strftime('%H:%M')}")
-                        self._update_minute_data()
-                        self.last_minute_trigger = now
+                # 每分钟更新实时股价
+                if self._is_minute_mark(now):
+                    if not self._is_same_minute(now, self.last_realtime_trigger):
+                        print(f"\n⏰ 更新实时股价: {now.strftime('%H:%M')}")
+                        self._update_realtime_price()
+                        self.last_realtime_trigger = now
                 
-                # 检查是否到达凌晨2点（每天更新日K/周K）
-                if self._is_daily_update_time(now):
-                    if not self._is_same_hour(now, self.last_daily_trigger):
-                        print(f"\n⏰ 每日更新时间: {now.strftime('%Y-%m-%d %H:%M')}")
-                        self._update_daily_data()
-                        self.last_daily_trigger = now
+                # 每小时更新日K/周K（整点）
+                if self._is_hourly_update_time(now):
+                    if not self._is_same_hour(now, self.last_hourly_trigger):
+                        print(f"\n⏰ 小时更新时间: {now.strftime('%Y-%m-%d %H:%M')}")
+                        self._update_kline_data()
+                        self.last_hourly_trigger = now
                 
-                # 每30秒检查一次（降低CPU占用）
-                time.sleep(30)
+                # 每20秒检查一次（降低CPU占用）
+                time.sleep(20)
             except Exception as e:
                 print(f"定时任务执行出错: {e}")
                 import traceback
                 traceback.print_exc()
-                time.sleep(30)
+                time.sleep(20)
     
-    def _is_five_minute_mark(self, now):
-        """判断是否是整5分钟时刻"""
-        return now.minute % 5 == 0 and now.second < 30
+    def _is_minute_mark(self, now):
+        """判断是否是整分钟时刻"""
+        return now.second < 20
     
-    def _is_daily_update_time(self, now):
-        """判断是否是每日更新时间（凌晨2点）"""
-        return now.hour == 2 and now.minute == 0 and now.second < 30
+    def _is_hourly_update_time(self, now):
+        """判断是否是整点时间"""
+        return now.minute == 0 and now.second < 20
     
     def _is_same_minute(self, time1, time2):
         """判断两个时间是否在同一分钟内"""
@@ -93,42 +93,44 @@ class SchedulerService:
                 time1.day == time2.day and 
                 time1.hour == time2.hour)
     
-    def _update_minute_data(self):
-        """更新所有自选股的1分钟K线数据"""
+    def _update_realtime_price(self):
+        """更新所有自选股的实时股价（跨所有用户，去重）"""
         try:
-            watchlist = watchlist_service.get_all_watchlist()
+            # 获取所有用户的自选股（去重）
+            watchlist = watchlist_service.get_all_unique_stocks()
             if not watchlist:
                 print("  ⚠️ 自选股列表为空，跳过更新")
                 return
             
-            print(f"📊 开始更新1分钟K线数据（共{len(watchlist)}只股票）...")
+            print(f"💰 开始更新实时股价（共{len(watchlist)}只股票）...")
             
             success_count = 0
             for stock in watchlist:
                 stock_code = stock['stock_code']
                 try:
-                    # 只更新1分钟数据
-                    minute_data = stock_service.fetch_minute_data(stock_code)
-                    if minute_data:
-                        stock_service.save_minute_data(minute_data)
+                    # 获取实时价格
+                    price_data = stock_service.fetch_realtime_price(stock_code)
+                    if price_data:
+                        stock_service.save_realtime_price(price_data)
                         success_count += 1
-                        print(f"  ✓ {stock_code} 1分钟K线已更新（{len(minute_data)}条）")
-                    else:
-                        print(f"  ⚠️ {stock_code} 无1分钟K线数据（可能需要权限）")
+                        print(f"  ✓ {stock_code} 当前价格: {price_data.get('price', 'N/A')}")
                     
-                    # 避免触发频率限制，每只股票间隔1秒
-                    time.sleep(1)
+                    # 避免触发频率限制
+                    time.sleep(0.5)
                 except Exception as e:
-                    print(f"  ✗ {stock_code} 1分钟K线更新失败: {e}")
+                    print(f"  ✗ {stock_code} 实时价格更新失败: {e}")
             
-            print(f"✅ 1分钟K线更新完成（成功{success_count}/{len(watchlist)}）\n")
+            print(f"✅ 实时股价更新完成（成功{success_count}/{len(watchlist)}）\n")
         except Exception as e:
-            print(f"❌ 更新1分钟K线数据失败: {e}")
+            print(f"❌ 更新实时股价失败: {e}")
+            import traceback
+            traceback.print_exc()
     
-    def _update_daily_data(self):
-        """更新所有自选股的日K/周K数据"""
+    def _update_kline_data(self):
+        """更新所有自选股的日K/周K数据（跨所有用户，去重）"""
         try:
-            watchlist = watchlist_service.get_all_watchlist()
+            # 获取所有用户的自选股（去重）
+            watchlist = watchlist_service.get_all_unique_stocks()
             if not watchlist:
                 print("  ⚠️ 自选股列表为空，跳过更新")
                 return
@@ -139,8 +141,8 @@ class SchedulerService:
             for stock in watchlist:
                 stock_code = stock['stock_code']
                 try:
-                    # 更新日K和周K
-                    stock_service.update_stock_data(stock_code)
+                    # 更新日K和周K（不包含分钟K）
+                    stock_service.update_kline_data_only(stock_code)
                     success_count += 1
                     print(f"  ✓ {stock_code} 日K/周K已更新")
                     

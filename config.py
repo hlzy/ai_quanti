@@ -18,10 +18,10 @@ class Config:
     # Tushare配置
     TUSHARE_TOKEN = os.getenv('TUSHARE_TOKEN', '')
     
-    # 通义千问配置
-    QWEN_API_KEY = os.getenv('QWEN_API_KEY', '')
-    QWEN_API_URL = os.getenv('QWEN_API_URL', 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation')
-    QWEN_MODEL = 'qwen-turbo'  # 可选: qwen-turbo, qwen-plus, qwen-max
+    # OpenRouter配置
+    OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+    SITE_URL = os.getenv('SITE_URL', 'https://ai-quant.example.com')
+    SITE_NAME = os.getenv('SITE_NAME', 'AI量化股票分析工具')
     
     # 数据库配置
     DATABASE_TYPE = os.getenv('DATABASE_TYPE', 'mysql')  # mysql 或 sqlite

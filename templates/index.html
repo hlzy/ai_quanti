@@ -270,13 +270,87 @@
 
     .chat-input-area {
         display: flex;
+        flex-direction: column;
         gap: 0.5rem;
+    }
+    
+    .input-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+    
+    .input-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
     }
 
     .chat-input-area textarea {
         flex: 1;
         min-height: 80px;
         resize: vertical;
+    }
+    
+    .image-preview-container {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 5px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .image-preview-item {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        border-radius: 5px;
+        overflow: hidden;
+        border: 2px solid #ddd;
+    }
+    
+    .image-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .image-preview-remove {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        background: rgba(245, 108, 108, 0.9);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        line-height: 1;
+    }
+    
+    .image-preview-remove:hover {
+        background: rgba(245, 108, 108, 1);
+    }
+    
+    .btn-icon {
+        padding: 0.6rem;
+        min-width: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+    }
+    
+    .hidden {
+        display: none;
     }
 
     .action-buttons {
@@ -456,22 +530,89 @@
 
     <!-- 中间：股票预览（K线图） -->
     <div class="chart-panel">
-        <!-- 操作按钮 -->
+        <!-- 操作按钮和实时行情 -->
         <div class="card">
             <div class="card-header">
                 <span id="currentStockTitle">选择一只股票开始分析</span>
             </div>
-            <div class="action-buttons">
-                <button class="btn btn-primary" onclick="updateStockData()" id="updateBtn" disabled>更新数据</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div class="action-buttons" style="margin-bottom: 0;">
+                    <button class="btn btn-primary" onclick="updateStockData()" id="updateBtn" disabled>更新数据</button>
+                </div>
             </div>
-        </div>
-        
-        <!-- 1分钟K线图 -->
-        <div class="card chart-container">
-            <div class="chart-header">
-                <span class="chart-title">📈 1分钟K线（2天窗口）</span>
+            
+            <!-- 完整实时行情面板 -->
+            <div id="realtimePanel" style="display: none;">
+                <div style="border-top: 1px solid #e4e7ed; padding-top: 1rem; margin-top: 0.5rem;">
+                    <h3 style="font-size: 1rem; color: #606266; margin-bottom: 1rem;">📈 实时行情</h3>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                        <!-- 当前价格 -->
+                        <div>
+                            <div style="font-size: 0.75rem; color: #909399;">当前价</div>
+                            <div style="font-size: 1.5rem; font-weight: 600;" id="rt_price">--</div>
+                            <div style="font-size: 0.75rem; margin-top: 0.25rem;">
+                                <span id="rt_change">--</span> / <span id="rt_change_percent">--</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 开盘价 -->
+                        <div>
+                            <div style="font-size: 0.75rem; color: #909399;">开盘价</div>
+                            <div style="font-size: 1.2rem; font-weight: 500;" id="rt_open">--</div>
+                        </div>
+                        
+                        <!-- 昨收价 -->
+                        <div>
+                            <div style="font-size: 0.75rem; color: #909399;">昨收价</div>
+                            <div style="font-size: 1.2rem; font-weight: 500;" id="rt_pre_close">--</div>
+                        </div>
+                        
+                        <!-- 最高价 -->
+                        <div>
+                            <div style="font-size: 0.75rem; color: #909399;">最高价</div>
+                            <div style="font-size: 1.2rem; font-weight: 500; color: #f56c6c;" id="rt_high">--</div>
+                        </div>
+                        
+                        <!-- 最低价 -->
+                        <div>
+                            <div style="font-size: 0.75rem; color: #909399;">最低价</div>
+                            <div style="font-size: 1.2rem; font-weight: 500; color: #67c23a;" id="rt_low">--</div>
+                        </div>
+                        
+                        <!-- 振幅 -->
+                        <div>
+                            <div style="font-size: 0.75rem; color: #909399;">振幅</div>
+                            <div style="font-size: 1.2rem; font-weight: 500;" id="rt_amplitude">--</div>
+                        </div>
+                    </div>
+                    
+                    <div style="border-top: 1px solid #f0f0f0; padding-top: 1rem; margin-top: 1rem;">
+                        <h4 style="font-size: 0.9rem; color: #606266; margin-bottom: 0.75rem;">📊 成交信息</h4>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem;">
+                            <div><span style="color: #909399;">成交量：</span><span id="rt_volume">--</span></div>
+                            <div><span style="color: #909399;">成交额：</span><span id="rt_amount">--</span></div>
+                            <div><span style="color: #909399;">换手率：</span><span id="rt_turnover">--</span></div>
+                        </div>
+                    </div>
+                    
+                    <div style="border-top: 1px solid #f0f0f0; padding-top: 1rem; margin-top: 1rem;">
+                        <h4 style="font-size: 0.9rem; color: #606266; margin-bottom: 0.75rem;">💰 估值信息</h4>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; font-size: 0.85rem;">
+                            <div><span style="color: #909399;">总市值：</span><span id="rt_total_mv">--</span></div>
+                            <div><span style="color: #909399;">流通市值：</span><span id="rt_circ_mv">--</span></div>
+                            <div><span style="color: #909399;">市盈率(动)：</span><span id="rt_pe">--</span></div>
+                            <div><span style="color: #909399;">市盈率(TTM)：</span><span id="rt_pe_ttm">--</span></div>
+                            <div><span style="color: #909399;">市净率：</span><span id="rt_pb">--</span></div>
+                            <div><span style="color: #909399;">股息率：</span><span id="rt_dv_ratio">--</span></div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: right; margin-top: 1rem; font-size: 0.75rem; color: #c0c4cc;">
+                        更新时间: <span id="rt_update_time">--</span>
+                    </div>
+                </div>
             </div>
-            <div id="minuteChart" style="width: 100%; height: 300px;"></div>
         </div>
         
         <!-- 日K线图 -->
@@ -498,6 +639,9 @@
                 💬 AI对话记录
                 <button class="btn btn-info" onclick="showVariablesHelp()" style="float: right; font-size: 0.85rem; padding: 0.4rem 0.8rem; margin-left: 0.5rem;" id="helpBtn" disabled title="变量说明">?</button>
                 <button class="btn btn-danger" onclick="clearChat()" style="float: right; font-size: 0.85rem; padding: 0.4rem 0.8rem;" id="clearChatBtn" disabled>清除</button>
+                <select id="modelSelect" style="float: right; font-size: 0.85rem; padding: 0.4rem 0.8rem; margin-right: 0.5rem; border: 1px solid #dcdfe6; border-radius: 5px; cursor: pointer;" disabled>
+                    <option value="">加载中...</option>
+                </select>
             </div>
             <div class="chat-history" id="chatHistory">
                 <div class="empty-state">
@@ -506,8 +650,20 @@
                 </div>
             </div>
             <div class="chat-input-area">
-                <textarea id="chatInput" placeholder="输入您的问题..."></textarea>
-                <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn" disabled>发送</button>
+                <!-- 图片预览区域 -->
+                <div id="imagePreviewContainer" class="image-preview-container hidden"></div>
+                
+                <!-- 输入行 -->
+                <div class="input-row">
+                    <div class="input-actions">
+                        <input type="file" id="imageInput" accept="image/*" class="hidden" multiple>
+                        <button class="btn btn-primary btn-icon" onclick="document.getElementById('imageInput').click()" title="上传图片" id="uploadBtn" disabled>
+                            📎
+                        </button>
+                    </div>
+                    <textarea id="chatInput" placeholder="输入您的问题或粘贴图片（Ctrl+V）..."></textarea>
+                    <button class="btn btn-primary" onclick="console.log('按钮被点击'); sendMessage();" id="sendBtn" disabled>发送</button>
+                </div>
             </div>
         </div>
     </div>
@@ -538,6 +694,19 @@
                 <strong>持仓</strong>：显示所有持仓股票的详细信息（代码、名称、数量、成本、当前价、盈亏等）及汇总数据。<br>
                 <strong>可用资金</strong>：显示账户可用现金余额。
             </p>
+            
+            <div class="variable-format" style="margin-top: 1rem;">
+                <strong>3. 实时数据：当前价格 / 实时行情</strong>
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                <strong>当前价格</strong>：仅显示当前选中股票的最新价格和更新时间（简化版）。<br>
+                <strong>实时行情</strong>：显示完整的实时行情数据，包括：
+            </p>
+            <ul class="param-list" style="margin-top: 0.5rem;">
+                <li><strong>价格信息</strong>：当前价、涨跌额、涨跌幅、开盘价、昨收价、最高价、最低价、振幅</li>
+                <li><strong>成交信息</strong>：成交量、成交额、换手率</li>
+                <li><strong>估值信息</strong>：总市值、流通市值、市盈率(动)、市盈率(TTM)、市净率、股息率</li>
+            </ul>
         </div>
 
         <div class="variable-help-section">
@@ -590,12 +759,40 @@
                 获取当前账户的可用现金余额。
             </p>
             
+            <div class="variable-example">
+                当前价格
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                获取当前选中股票的最新价格和更新时间（仅价格，简化版）。
+            </p>
+            
+            <div class="variable-example">
+                实时行情
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                获取当前选中股票的完整实时行情数据，包括价格、涨跌、成交量、市值、PE/PB等估值指标。
+            </p>
+            
             <h4 style="font-size: 1rem; color: #667eea; margin-top: 1rem;">组合使用示例</h4>
             <div class="variable-example">
                 根据 持仓 和 可用资金 的情况，结合 日K__30天_MACD 判断是否适合加仓。
             </div>
             <p style="color: #606266; line-height: 1.6;">
                 AI将获取完整的持仓信息、可用资金和K线数据，综合分析后给出加仓建议。
+            </p>
+            
+            <div class="variable-example">
+                当前价格 是多少？结合 日K__10天 分析短期趋势。
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                AI将获取股票当前价格和近10天日K线数据，分析短期走势。
+            </p>
+            
+            <div class="variable-example">
+                分析 实时行情 数据，结合 日K__60天_MACD&RSI 判断当前估值是否合理。
+            </div>
+            <p style="color: #606266; line-height: 1.6;">
+                AI将获取完整的实时行情（含估值数据）和60天K线技术指标，综合分析股票估值和技术面。
             </p>
         </div>
     </div>
@@ -616,6 +813,66 @@
 
 <script>
 let currentStock = null;
+let selectedModel = null;  // 当前选择的模型
+let availableModels = [];  // 存储所有可用模型信息
+let realtimePriceTimer = null;  // 实时价格定时器
+
+// 加载可用模型列表
+async function loadModels() {
+    try {
+        const response = await fetch('/api/chat/models');
+        const result = await response.json();
+        
+        if (result.success && result.data.length > 0) {
+            availableModels = result.data;  // 保存完整模型信息
+            
+            const select = document.getElementById('modelSelect');
+            select.innerHTML = '';
+            
+            result.data.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.model_id;
+                // 添加 vision 标记
+                const visionTag = model.supports_vision ? ' 🖼️' : '';
+                option.textContent = model.model_name + visionTag;
+                select.appendChild(option);
+            });
+            
+            // 默认选择第一个模型
+            selectedModel = result.data[0].model_id;
+            select.value = selectedModel;
+            
+            // 监听选择变化
+            select.addEventListener('change', (e) => {
+                selectedModel = e.target.value;
+                console.log('🔄 切换模型:', selectedModel);
+                checkVisionSupport();  // 检查vision支持
+            });
+            
+            console.log('✅ 模型列表加载成功:', result.data);
+        } else {
+            console.warn('⚠️ 没有可用模型');
+        }
+    } catch (error) {
+        console.error('❌ 加载模型列表失败:', error);
+    }
+}
+
+// 检查当前模型是否支持vision
+function checkVisionSupport() {
+    if (uploadedImages.length === 0) return;
+    
+    const currentModel = availableModels.find(m => m.model_id === selectedModel);
+    if (!currentModel || !currentModel.supports_vision) {
+        // 当前模型不支持vision，显示温馨提示（不阻止）
+        const visionModels = availableModels.filter(m => m.supports_vision);
+        if (visionModels.length > 0) {
+            const visionModelNames = visionModels.map(m => m.model_name).join('、');
+            showMessage(`💡 提示：当前模型可能不支持图片，建议切换到：${visionModelNames}`, 'info');
+        }
+    }
+}
+
 
 // 加载自选股
 async function loadWatchlist() {
@@ -700,12 +957,110 @@ async function selectStock(stockCode, stockName) {
     document.getElementById('currentStockTitle').textContent = `${stockName} (${stockCode})`;
     document.getElementById('updateBtn').disabled = false;
     document.getElementById('sendBtn').disabled = false;
+    document.getElementById('uploadBtn').disabled = false;
     document.getElementById('clearChatBtn').disabled = false;
     document.getElementById('helpBtn').disabled = false;
+    document.getElementById('modelSelect').disabled = false;
+    document.getElementById('selectTemplateBtn').disabled = false;
+    
+    // 显示实时行情面板
+    document.getElementById('realtimePanel').style.display = 'block';
+    
+    // 立即加载实时行情（从缓存）
+    await loadRealtimePrice();
     
     // 加载K线数据和聊天记录
     await loadKlineCharts();
     await loadChatHistory();
+    
+    // 启动实时价格更新
+    startRealtimePriceUpdate();
+}
+
+// 启动实时价格更新（每30秒刷新一次）
+function startRealtimePriceUpdate() {
+    // 清除之前的定时器
+    if (realtimePriceTimer) {
+        clearInterval(realtimePriceTimer);
+    }
+    
+    // 立即加载一次
+    loadRealtimePrice();
+    
+    // 每30秒更新一次
+    realtimePriceTimer = setInterval(loadRealtimePrice, 30000);
+}
+
+// 加载实时行情
+async function loadRealtimePrice() {
+    if (!currentStock) return;
+    
+    try {
+        const response = await fetch(`/api/stock/realtime/${currentStock.code}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const data = result.data;
+            
+            // 当前价格（带涨跌颜色）
+            const price = parseFloat(data.price || 0);
+            const change = parseFloat(data.change || 0);
+            const changePct = parseFloat(data.change_percent || 0);
+            
+            const priceColor = change >= 0 ? '#f56c6c' : '#67c23a';
+            document.getElementById('rt_price').innerHTML = `¥${price.toFixed(2)}`;
+            document.getElementById('rt_price').style.color = priceColor;
+            
+            // 涨跌额和涨跌幅
+            const changeText = change >= 0 ? `+${change.toFixed(2)}` : change.toFixed(2);
+            const changePctText = changePct >= 0 ? `+${changePct.toFixed(2)}%` : `${changePct.toFixed(2)}%`;
+            document.getElementById('rt_change').innerHTML = changeText;
+            document.getElementById('rt_change').style.color = priceColor;
+            document.getElementById('rt_change_percent').innerHTML = changePctText;
+            document.getElementById('rt_change_percent').style.color = priceColor;
+            
+            // 四价
+            document.getElementById('rt_open').textContent = data.open ? `¥${parseFloat(data.open).toFixed(2)}` : '--';
+            document.getElementById('rt_pre_close').textContent = data.pre_close ? `¥${parseFloat(data.pre_close).toFixed(2)}` : '--';
+            document.getElementById('rt_high').textContent = data.high ? `¥${parseFloat(data.high).toFixed(2)}` : '--';
+            document.getElementById('rt_low').textContent = data.low ? `¥${parseFloat(data.low).toFixed(2)}` : '--';
+            
+            // 振幅
+            document.getElementById('rt_amplitude').textContent = data.amplitude ? `${parseFloat(data.amplitude).toFixed(2)}%` : '--';
+            
+            // 成交信息
+            const volume = data.volume ? (parseFloat(data.volume) / 100000000).toFixed(2) + '亿手' : '--';
+            const amount = data.amount ? (parseFloat(data.amount) / 100000000).toFixed(2) + '亿元' : '--';
+            const turnover = data.turnover_ratio ? parseFloat(data.turnover_ratio).toFixed(2) + '%' : '--';
+            
+            document.getElementById('rt_volume').textContent = volume;
+            document.getElementById('rt_amount').textContent = amount;
+            document.getElementById('rt_turnover').textContent = turnover;
+            
+            // 估值信息
+            const totalMv = data.total_mv ? (parseFloat(data.total_mv) / 10000).toFixed(2) + '亿' : '--';
+            const circMv = data.circ_mv ? (parseFloat(data.circ_mv) / 10000).toFixed(2) + '亿' : '--';
+            
+            document.getElementById('rt_total_mv').textContent = totalMv;
+            document.getElementById('rt_circ_mv').textContent = circMv;
+            document.getElementById('rt_pe').textContent = data.pe ? parseFloat(data.pe).toFixed(2) : '--';
+            document.getElementById('rt_pe_ttm').textContent = data.pe_ttm ? parseFloat(data.pe_ttm).toFixed(2) : '--';
+            document.getElementById('rt_pb').textContent = data.pb ? parseFloat(data.pb).toFixed(2) : '--';
+            document.getElementById('rt_dv_ratio').textContent = data.dv_ratio ? parseFloat(data.dv_ratio).toFixed(2) + '%' : '--';
+            
+            // 更新时间
+            const updateTime = new Date(data.updated_at);
+            const timeStr = `${updateTime.getMonth()+1}/${updateTime.getDate()} ${String(updateTime.getHours()).padStart(2,'0')}:${String(updateTime.getMinutes()).padStart(2,'0')}`;
+            document.getElementById('rt_update_time').textContent = timeStr;
+            
+        } else {
+            console.warn('未获取到实时行情数据');
+            // 显示暂无数据
+            document.getElementById('rt_price').textContent = '--';
+        }
+    } catch (error) {
+        console.error('加载实时行情失败:', error);
+    }
 }
 
 // 加载K线图数据
@@ -713,35 +1068,25 @@ async function loadKlineCharts() {
     if (!currentStock) return;
     
     try {
-        // 并行加载三种周期的数据
-        const [minuteRes, dailyRes, weeklyRes] = await Promise.all([
-            fetch(`/api/stock/data/${currentStock.code}?period=minute&days=1440`),
+        // 并行加载两种周期的数据（移除1分钟K线）
+        const [dailyRes, weeklyRes] = await Promise.all([
             fetch(`/api/stock/data/${currentStock.code}?period=daily&days=60`),
             fetch(`/api/stock/data/${currentStock.code}?period=weekly&days=52`)
         ]);
         
         // 检查HTTP状态码
-        if (!minuteRes.ok || !dailyRes.ok || !weeklyRes.ok) {
-            throw new Error(`HTTP错误: minute=${minuteRes.status}, daily=${dailyRes.status}, weekly=${weeklyRes.status}`);
+        if (!dailyRes.ok || !weeklyRes.ok) {
+            throw new Error(`HTTP错误: daily=${dailyRes.status}, weekly=${weeklyRes.status}`);
         }
         
-        const minuteResult = await minuteRes.json();
         const dailyResult = await dailyRes.json();
         const weeklyResult = await weeklyRes.json();
         
         // 打印详细日志
-        console.log('1分钟K线数据:', minuteResult);
         console.log('日K线数据:', dailyResult);
         console.log('周K线数据:', weeklyResult);
         
         // 渲染图表
-        if (minuteResult.success && minuteResult.data && minuteResult.data.length > 0) {
-            renderKlineChart('minuteChart', minuteResult.data, '1分钟K线');
-        } else {
-            console.warn('1分钟K线无数据或失败:', minuteResult);
-            document.getElementById('minuteChart').innerHTML = '<div class="chart-placeholder">暂无数据，请点击"更新数据"</div>';
-        }
-        
         if (dailyResult.success && dailyResult.data && dailyResult.data.length > 0) {
             renderKlineChart('dailyChart', dailyResult.data, '日K线');
         } else {
@@ -781,8 +1126,32 @@ function renderKlineChart(containerId, data, title) {
     try {
         const chart = echarts.init(container);
         
+        // 数据验证和清洗
+        if (!Array.isArray(data) || data.length === 0) {
+            console.warn(`${containerId} 数据为空或格式错误`);
+            container.innerHTML = '<div class="chart-placeholder">数据格式错误</div>';
+            return;
+        }
+        
+        // 过滤无效数据
+        const validData = data.filter(d => {
+            return d && 
+                   typeof d.open === 'number' && !isNaN(d.open) &&
+                   typeof d.close === 'number' && !isNaN(d.close) &&
+                   typeof d.low === 'number' && !isNaN(d.low) &&
+                   typeof d.high === 'number' && !isNaN(d.high);
+        });
+        
+        if (validData.length === 0) {
+            console.warn(`${containerId} 没有有效数据`);
+            container.innerHTML = '<div class="chart-placeholder">没有有效的K线数据</div>';
+            return;
+        }
+        
+        console.log(`${containerId} 有效数据数量: ${validData.length}/${data.length}`);
+        
         // 准备数据
-        const dates = data.map(d => {
+        const dates = validData.map(d => {
             if (d.trade_time) {
                 // 分钟数据
                 const dt = new Date(d.trade_time);
@@ -793,8 +1162,8 @@ function renderKlineChart(containerId, data, title) {
             }
         });
         
-        const ohlc = data.map(d => [d.open, d.close, d.low, d.high]);
-        const volumes = data.map(d => d.volume || 0);
+        const ohlc = validData.map(d => [d.open, d.close, d.low, d.high]);
+        const volumes = validData.map(d => d.volume || 0);
     
     // 配置项
     const option = {
@@ -805,15 +1174,38 @@ function renderKlineChart(containerId, data, title) {
                 type: 'cross'
             },
             formatter: function(params) {
+                if (!params || params.length === 0) return '';
+                
                 let result = params[0].name + '<br/>';
                 const candleData = params[0].data;
-                result += '开盘: ' + candleData[1].toFixed(2) + '<br/>';
-                result += '收盘: ' + candleData[2].toFixed(2) + '<br/>';
-                result += '最低: ' + candleData[3].toFixed(2) + '<br/>';
-                result += '最高: ' + candleData[4].toFixed(2) + '<br/>';
-                if (params[1]) {
-                    result += '成交量: ' + (params[1].data / 10000).toFixed(2) + '万';
+                
+                // 验证数据存在且格式正确
+                if (!candleData || !Array.isArray(candleData) || candleData.length < 5) {
+                    return result + '数据格式错误';
                 }
+                
+                // 验证数值类型
+                const open = parseFloat(candleData[1]);
+                const close = parseFloat(candleData[2]);
+                const low = parseFloat(candleData[3]);
+                const high = parseFloat(candleData[4]);
+                
+                if (isNaN(open) || isNaN(close) || isNaN(low) || isNaN(high)) {
+                    return result + '数据包含非数值';
+                }
+                
+                result += '开盘: ' + open.toFixed(2) + '<br/>';
+                result += '收盘: ' + close.toFixed(2) + '<br/>';
+                result += '最低: ' + low.toFixed(2) + '<br/>';
+                result += '最高: ' + high.toFixed(2) + '<br/>';
+                
+                if (params[1] && params[1].data) {
+                    const volume = parseFloat(params[1].data);
+                    if (!isNaN(volume)) {
+                        result += '成交量: ' + (volume / 10000).toFixed(2) + '万';
+                    }
+                }
+                
                 return result;
             }
         },
@@ -1013,9 +1405,30 @@ async function loadChatHistory() {
                 if (msg.role === 'user') {
                     // 开始一个新的对话组 - 用户问题在上
                     html += '<div class="chat-group">';
+                    
+                    // 解析消息内容（可能包含图片）
+                    let userContent = '';
+                    try {
+                        const parsed = JSON.parse(msg.content);
+                        // JSON格式：包含text和images
+                        if (parsed.images && parsed.images.length > 0) {
+                            userContent += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">';
+                            parsed.images.forEach(img => {
+                                userContent += `<img src="${img}" style="max-width: 150px; max-height: 150px; border-radius: 5px; object-fit: cover;">`;
+                            });
+                            userContent += '</div>';
+                        }
+                        if (parsed.text) {
+                            userContent += `<div>${escapeHtml(parsed.text)}</div>`;
+                        }
+                    } catch (e) {
+                        // 纯文本格式
+                        userContent = `<div>${escapeHtml(msg.content)}</div>`;
+                    }
+                    
                     html += `
                         <div class="chat-message user">
-                            <div>${escapeHtml(msg.content)}</div>
+                            ${userContent}
                             <div class="chat-time">${formatDateTime(msg.created_at)}</div>
                         </div>
                     `;
@@ -1121,28 +1534,169 @@ function renderMarkdown(content) {
     }
 }
 
+// ========== 图片上传功能 ==========
+let uploadedImages = []; // 存储上传的图片（base64格式）
+
+// 图片文件选择处理
+document.getElementById('imageInput').addEventListener('change', function(e) {
+    handleImageFiles(e.target.files);
+    e.target.value = ''; // 清空input，允许重复选择同一文件
+});
+
+// 图片粘贴处理
+document.getElementById('chatInput').addEventListener('paste', function(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    
+    for (let item of items) {
+        if (item.type.indexOf('image') !== -1) {
+            e.preventDefault(); // 阻止默认粘贴行为
+            const file = item.getAsFile();
+            if (file) {
+                handleImageFiles([file]);
+            }
+        }
+    }
+});
+
+// 处理图片文件
+function handleImageFiles(files) {
+    for (let file of files) {
+        if (!file.type.startsWith('image/')) {
+            showMessage('只能上传图片文件', 'error');
+            continue;
+        }
+        
+        // 检查文件大小（限制20MB）
+        if (file.size > 20 * 1024 * 1024) {
+            showMessage('图片大小不能超过20MB', 'error');
+            continue;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64 = e.target.result;
+            addImagePreview(base64);
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// 添加图片预览
+function addImagePreview(base64) {
+    uploadedImages.push(base64);
+    
+    const container = document.getElementById('imagePreviewContainer');
+    container.classList.remove('hidden');
+    
+    const index = uploadedImages.length - 1;
+    const previewItem = document.createElement('div');
+    previewItem.className = 'image-preview-item';
+    previewItem.innerHTML = `
+        <img src="${base64}" alt="预览图">
+        <button class="image-preview-remove" onclick="removeImage(${index})" title="删除">×</button>
+    `;
+    
+    container.appendChild(previewItem);
+    
+    // 检查当前模型是否支持vision
+    checkVisionSupport();
+}
+
+// 删除图片
+function removeImage(index) {
+    uploadedImages.splice(index, 1);
+    
+    const container = document.getElementById('imagePreviewContainer');
+    container.innerHTML = '';
+    
+    // 重新渲染所有图片
+    uploadedImages.forEach((base64, idx) => {
+        const previewItem = document.createElement('div');
+        previewItem.className = 'image-preview-item';
+        previewItem.innerHTML = `
+            <img src="${base64}" alt="预览图">
+            <button class="image-preview-remove" onclick="removeImage(${idx})" title="删除">×</button>
+        `;
+        container.appendChild(previewItem);
+    });
+    
+    // 如果没有图片了，隐藏容器
+    if (uploadedImages.length === 0) {
+        container.classList.add('hidden');
+    }
+}
+
+// 清空所有图片
+function clearAllImages() {
+    uploadedImages = [];
+    const container = document.getElementById('imagePreviewContainer');
+    container.innerHTML = '';
+    container.classList.add('hidden');
+}
+
 // 发送消息
 async function sendMessage() {
-    if (!currentStock) return;
+    console.log('📤 sendMessage 被调用');
+    console.log('  - currentStock:', currentStock);
+    console.log('  - selectedModel:', selectedModel);
+    console.log('  - uploadedImages.length:', uploadedImages.length);
+    
+    if (!currentStock) {
+        console.warn('⚠️ 未选择股票，退出');
+        showMessage('请先选择一只股票', 'warning');
+        return;
+    }
     
     const input = document.getElementById('chatInput');
     const message = input.value.trim();
+    console.log('  - message:', message);
     
-    if (!message) {
-        showMessage('请输入消息', 'error');
+    // 检查是否有消息或图片
+    if (!message && uploadedImages.length === 0) {
+        showMessage('请输入消息或上传图片', 'error');
         return;
+    }
+    
+    // 如果有图片，给出温馨提示（但不阻止）
+    if (uploadedImages.length > 0) {
+        const currentModel = availableModels.find(m => m.model_id === selectedModel);
+        if (currentModel && !currentModel.supports_vision) {
+            const visionModels = availableModels.filter(m => m.supports_vision);
+            if (visionModels.length > 0) {
+                const visionModelNames = visionModels.map(m => m.model_name).join('、');
+                console.warn(`⚠️ 当前模型可能不支持图片输入，建议切换到：${visionModelNames}`);
+                // 不阻止发送，让后端API来判断
+            }
+        }
     }
     
     const btn = document.getElementById('sendBtn');
     btn.disabled = true;
     btn.textContent = '发送中...';
     
+    // 保存图片引用（避免清空后丢失）
+    const imagesToSend = [...uploadedImages];
+    
+    // 构建用户消息HTML（包含图片预览）
+    let userMsgContent = '';
+    if (imagesToSend.length > 0) {
+        userMsgContent += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">';
+        imagesToSend.forEach(img => {
+            userMsgContent += `<img src="${img}" style="max-width: 150px; max-height: 150px; border-radius: 5px; object-fit: cover;">`;
+        });
+        userMsgContent += '</div>';
+    }
+    if (message) {
+        userMsgContent += `<div>${escapeHtml(message)}</div>`;
+    }
+    
     // 立即显示用户消息
     const container = document.getElementById('chatHistory');
     const userMsgHtml = `
         <div class="chat-group" id="temp-msg">
             <div class="chat-message user">
-                <div>${escapeHtml(message)}</div>
+                ${userMsgContent}
                 <div class="chat-time">${formatDateTime(new Date())}</div>
             </div>
             <div class="chat-message assistant">
@@ -1159,18 +1713,24 @@ async function sendMessage() {
     container.insertAdjacentHTML('beforeend', userMsgHtml);
     container.scrollTop = container.scrollHeight;
     
-    // 清空输入框
+    // 准备发送数据
+    const sendData = {
+        stock_code: currentStock.code,
+        message: message,
+        model: selectedModel,
+        images: imagesToSend.length > 0 ? imagesToSend : null
+    };
+    
+    // 清空输入框和图片
     input.value = '';
+    clearAllImages();
     
     try {
-        console.log('📨 发送消息到API...');
+        console.log('📨 发送消息到API...', '模型:', selectedModel, '图片数量:', imagesToSend.length);
         const response = await fetch('/api/chat/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                stock_code: currentStock.code,
-                message: message
-            })
+            body: JSON.stringify(sendData)
         });
         
         console.log('📥 收到API响应, status:', response.status);
@@ -1186,7 +1746,7 @@ async function sendMessage() {
             // 删除临时消息
             document.getElementById('temp-msg')?.remove();
             console.log('🔄 重新加载聊天记录...');
-            // 重新加载完整的聊天记录（包含真实的AI回复）
+            // 重新加载完整的聊天记录（包含真实的AI回复和图片）
             await loadChatHistory();
             console.log('✅ 聊天记录加载完成');
         } else {
@@ -1310,7 +1870,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
     
-    loadWatchlist();
+    loadModels();     // 加载可用模型
+    loadWatchlist();  // 加载自选股
     
     // 回车换行，Shift+回车发送消息
     const chatInput = document.getElementById('chatInput');

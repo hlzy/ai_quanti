@@ -1,5 +1,5 @@
 """
-AI服务模块 - 通义千问API集成
+AI服务模块 - OpenRouter API集成
 """
 import requests
 import json
@@ -12,57 +12,148 @@ from utils.logger import ai_logger
 
 
 class AIService:
-    """AI服务类 - 使用通义千问API"""
+    """AI服务类 - 使用OpenRouter API"""
     
     def __init__(self):
-        self.api_key = config.QWEN_API_KEY
-        self.api_url = config.QWEN_API_URL
-        self.model = config.QWEN_MODEL
+        # OpenRouter配置
+        self.api_key = config.OPENROUTER_API_KEY
+        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.site_url = config.SITE_URL or "https://ai-quant.example.com"
+        self.site_name = config.SITE_NAME or "AI量化股票分析工具"
+        
+        # 默认模型
+        self.default_model = "deepseek/deepseek-chat"
+        
         self.prompt_history_dir = os.path.join(config.BASE_DIR, 'prompt_history')
         
         # 确保prompt_history目录存在
         os.makedirs(self.prompt_history_dir, exist_ok=True)
         
         if not self.api_key:
-            raise ValueError("通义千问API Key未配置，请在.env文件中设置QWEN_API_KEY")
+            raise ValueError("OpenRouter API Key未配置，请在.env文件中设置OPENROUTER_API_KEY")
     
-    def chat(self, messages, temperature=0.7, max_tokens=2000):
-        """调用通义千问API进行对话"""
-        ai_logger.debug(f"调用AI API, 消息数: {len(messages)}, temperature: {temperature}")
+    def get_available_models(self):
+        """获取可用的模型列表"""
+        try:
+            query = """
+            SELECT model_id, model_name, is_enabled, display_order, supports_vision
+            FROM ai_models 
+            WHERE is_enabled = 1 
+            ORDER BY display_order, model_id
+            """
+            models = db_manager.execute_query(query)
+            
+            if not models:
+                # 如果数据库中没有配置，返回默认模型
+                return [
+                    {'model_id': 'deepseek/deepseek-chat', 'model_name': 'DeepSeek Chat', 'is_enabled': 1, 'display_order': 1, 'supports_vision': 0},
+                    {'model_id': 'anthropic/claude-opus-4-20250514', 'model_name': 'Claude Opus 4', 'is_enabled': 1, 'display_order': 2, 'supports_vision': 1}
+                ]
+            
+            return models
+        except Exception as e:
+            ai_logger.error(f"获取模型列表失败: {e}")
+            # 返回默认模型
+            return [
+                {'model_id': 'deepseek/deepseek-chat', 'model_name': 'DeepSeek Chat', 'is_enabled': 1, 'display_order': 1, 'supports_vision': 0},
+                {'model_id': 'anthropic/claude-opus-4-20250514', 'model_name': 'Claude Opus 4', 'is_enabled': 1, 'display_order': 2, 'supports_vision': 1}
+            ]
+    
+    def check_model_supports_vision(self, model_id):
+        """检查模型是否支持vision（图像输入）"""
+        try:
+            query = """
+            SELECT supports_vision 
+            FROM ai_models 
+            WHERE model_id = %s AND is_enabled = 1
+            """
+            result = db_manager.execute_query(query, (model_id,), fetch_one=True)
+            
+            if result:
+                return bool(result.get('supports_vision', 0))
+            
+            # 默认已知支持 vision 的模型
+            vision_models = [
+                'anthropic/claude-opus-4-20250514',
+                'anthropic/claude-3.5-sonnet',
+                'anthropic/claude-3-opus',
+                'google/gemini-2.0-flash-exp:free',
+                'google/gemini-pro-vision',
+                'openai/gpt-4-vision-preview',
+                'openai/gpt-4o',
+                'openai/gpt-4o-mini'
+            ]
+            return model_id in vision_models
+            
+        except Exception as e:
+            ai_logger.error(f"检查模型vision支持失败: {e}")
+            return False
+    
+    def chat(self, messages, model=None, temperature=0.7, max_tokens=2000):
+        """调用OpenRouter API进行对话
+        
+        Args:
+            messages: 对话消息列表
+            model: 模型ID，如果为None则使用默认模型
+            temperature: 温度参数
+            max_tokens: 最大token数
+        """
+        # 如果没有指定模型，使用默认模型
+        if not model:
+            model = self.default_model
+        
+        ai_logger.debug(f"调用OpenRouter API, 模型: {model}, 消息数: {len(messages)}, temperature: {temperature}")
+        
+        # 检查消息格式
+        for i, msg in enumerate(messages):
+            if msg.get('role') == 'user' and isinstance(msg.get('content'), list):
+                print(f"🖼️ 消息 {i} 包含 vision content, 类型数: {len(msg['content'])}")
+                for j, item in enumerate(msg['content']):
+                    if item.get('type') == 'image_url':
+                        url = item['image_url']['url']
+                        print(f"   图片 {j}: {url[:100]}...")  # 只打印前100字符
         
         headers = {
             'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}'
+            'Authorization': f'Bearer {self.api_key}',
+            'HTTP-Referer': self.site_url
         }
         
         payload = {
-            'model': self.model,
-            'input': {
-                'messages': messages
-            },
-            'parameters': {
-                'result_format': 'message',  # 必须！指定返回格式
-                'temperature': temperature,
-                'max_tokens': max_tokens,
-                'top_p': 0.8
-            }
+            'model': model,
+            'messages': messages,
+            'temperature': temperature,
+            'max_tokens': max_tokens
         }
         
         try:
-            response = requests.post(self.api_url, headers=headers, json=payload, timeout=30)
+            print(f"🌐 发送请求到 OpenRouter API...")
+            print(f"   URL: {self.api_url}")
+            print(f"   模型: {model}")
+            print(f"   消息数: {len(messages)}")
+            
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=60)
+            
+            print(f"📥 收到响应: status={response.status_code}")
+            
+            # 如果不是200，打印完整响应内容
+            if response.status_code != 200:
+                print(f"❌ API错误响应: {response.text}")
+            
             response.raise_for_status()
             
             result = response.json()
             
             # 打印调试信息
-            print(f"API响应: {json.dumps(result, ensure_ascii=False, indent=2)}")
+            print(f"API响应 - 模型: {model}")
             
-            # 解析响应
-            if result.get('output') and result['output'].get('choices'):
-                ai_logger.info(f"AI响应成功, tokens: {result.get('usage', {})}")
-                return result['output']['choices'][0]['message']['content']
+            # 解析响应 - OpenRouter使用标准OpenAI格式
+            if result.get('choices') and len(result['choices']) > 0:
+                content = result['choices'][0]['message']['content']
+                ai_logger.info(f"AI响应成功, 模型: {model}, tokens: {result.get('usage', {})}")
+                return content
             else:
-                error_msg = result.get('message', 'AI响应格式错误')
+                error_msg = result.get('error', {}).get('message', 'AI响应格式错误')
                 ai_logger.error(f"API响应格式异常: {error_msg}")
                 print(f"API响应格式异常: {error_msg}")
                 return f"AI响应错误: {error_msg}"
@@ -71,20 +162,21 @@ class AIService:
             print(f"API调用失败: {e}")
             return f"AI服务暂时不可用: {str(e)}"
     
-    def analyze_stock(self, stock_code, stock_name, stock_data, indicators, user_message=None):
+    def analyze_stock(self, stock_code, stock_name, stock_data, indicators, user_message=None, model=None):
         """分析股票数据并生成交易策略"""
         # 构建系统提示
-        system_prompt = """你是一位专业的量化交易分析师，擅长技术分析和交易策略制定。
-请基于提供的股票K线数据和技术指标，进行深入分析并给出交易建议。
+        system_prompt = ""
+#         system_prompt = """你是一位专业的量化交易分析师，擅长技术分析和交易策略制定。
+# 请基于提供的股票K线数据和技术指标，进行深入分析并给出交易建议。
 
-分析要点：
-1. 趋势分析：基于K线形态和均线系统判断当前趋势
-2. 技术指标分析：MACD、RSI等指标的信号解读
-3. 支撑位和阻力位分析
-4. 交易建议：买入、卖出或持有，并给出理由和目标价位
-5. 风险提示
+# 分析要点：
+# 1. 趋势分析：基于K线形态和均线系统判断当前趋势
+# 2. 技术指标分析：MACD、RSI等指标的信号解读
+# 3. 支撑位和阻力位分析
+# 4. 交易建议：买入、卖出或持有，并给出理由和目标价位
+# 5. 风险提示
 
-请用专业但易懂的语言进行分析。"""
+# 请用专业但易懂的语言进行分析。"""
         
         # 构建股票数据上下文
         recent_data = stock_data[-10:] if len(stock_data) > 10 else stock_data
@@ -113,7 +205,7 @@ class AIService:
             messages.append({'role': 'user', 'content': user_message})
         
         # 调用AI
-        response = self.chat(messages, temperature=0.7, max_tokens=2000)
+        response = self.chat(messages, model=model, temperature=0.7, max_tokens=2000)
         return response
     
     def save_chat_history(self, user_id, stock_code, role, content):
@@ -331,6 +423,102 @@ class AIService:
         """格式化可用资金数据"""
         return f"可用资金: {cash_balance:,.2f} 元"
     
+    def _format_realtime_price_data(self, stock_code, price_data):
+        """格式化完整实时行情数据（包括股价和估值）"""
+        if not price_data:
+            return f"股票 {stock_code} 暂无实时行情数据"
+        
+        from datetime import datetime
+        
+        result = f"=== 实时行情数据 ===\n\n"
+        result += f"股票代码: {price_data.get('ts_code', stock_code)}\n"
+        
+        if price_data.get('stock_name'):
+            result += f"股票名称: {price_data['stock_name']}\n"
+        
+        result += "\n--- 价格信息 ---\n"
+        
+        # 当前价格和涨跌
+        price = price_data.get('price')
+        if price:
+            result += f"当前价: {price:.2f} 元\n"
+        
+        change = price_data.get('change')
+        change_pct = price_data.get('change_percent')
+        if change is not None:
+            result += f"涨跌额: {change:+.2f} 元\n"
+        if change_pct is not None:
+            result += f"涨跌幅: {change_pct:+.2f}%\n"
+        
+        # 四价
+        if price_data.get('open'):
+            result += f"开盘价: {price_data['open']:.2f} 元\n"
+        if price_data.get('pre_close'):
+            result += f"昨收价: {price_data['pre_close']:.2f} 元\n"
+        if price_data.get('high'):
+            result += f"最高价: {price_data['high']:.2f} 元\n"
+        if price_data.get('low'):
+            result += f"最低价: {price_data['low']:.2f} 元\n"
+        
+        # 振幅
+        if price_data.get('amplitude'):
+            result += f"振幅: {price_data['amplitude']:.2f}%\n"
+        
+        # 成交信息
+        result += "\n--- 成交信息 ---\n"
+        
+        volume = price_data.get('volume')
+        if volume:
+            result += f"成交量: {volume / 100000000:.2f} 亿手\n"
+        
+        amount = price_data.get('amount')
+        if amount:
+            result += f"成交额: {amount / 100000000:.2f} 亿元\n"
+        
+        turnover = price_data.get('turnover_ratio')
+        if turnover:
+            result += f"换手率: {turnover:.2f}%\n"
+        
+        # 估值信息
+        has_valuation = any([
+            price_data.get('total_mv'),
+            price_data.get('circ_mv'),
+            price_data.get('pe'),
+            price_data.get('pe_ttm'),
+            price_data.get('pb'),
+            price_data.get('dv_ratio')
+        ])
+        
+        if has_valuation:
+            result += "\n--- 估值信息 ---\n"
+            
+            if price_data.get('total_mv'):
+                result += f"总市值: {price_data['total_mv'] / 10000:.2f} 亿元\n"
+            if price_data.get('circ_mv'):
+                result += f"流通市值: {price_data['circ_mv'] / 10000:.2f} 亿元\n"
+            if price_data.get('pe'):
+                result += f"市盈率(动): {price_data['pe']:.2f}\n"
+            if price_data.get('pe_ttm'):
+                result += f"市盈率(TTM): {price_data['pe_ttm']:.2f}\n"
+            if price_data.get('pb'):
+                result += f"市净率: {price_data['pb']:.2f}\n"
+            if price_data.get('dv_ratio'):
+                result += f"股息率: {price_data['dv_ratio']:.2f}%\n"
+        
+        # 更新时间
+        result += "\n--- 数据时间 ---\n"
+        if price_data.get('trade_date'):
+            result += f"交易日期: {price_data['trade_date']}\n"
+        
+        if price_data.get('updated_at'):
+            try:
+                update_time = datetime.strptime(price_data['updated_at'], '%Y-%m-%d %H:%M:%S')
+                result += f"更新时间: {update_time.strftime('%Y年%m月%d日 %H:%M:%S')}\n"
+            except:
+                result += f"更新时间: {price_data['updated_at']}\n"
+        
+        return result
+    
     def _replace_variables(self, user_id, stock_code, message):
         """替换消息中的变量占位符
         
@@ -343,6 +531,8 @@ class AIService:
         
         2. 持仓 - 获取所有持仓信息
         3. 可用资金 - 获取现金余额
+        4. 当前价格 - 获取当前股票的实时价格（简化版，仅价格）
+        5. 实时行情 - 获取当前股票的完整实时行情（价格+估值+成交）
         
         示例：
         - 日K_复旦微电_30天_MACD&EMA
@@ -350,6 +540,8 @@ class AIService:
         - 1分钟K
         - 持仓
         - 可用资金
+        - 当前价格
+        - 实时行情
         """
         from services.stock_service import stock_service
         from services.position_service import position_service
@@ -502,9 +694,35 @@ class AIService:
             replaced_message = replaced_message.replace('可用资金', f'\n"""\n{cash_str}\n"""')
             variables_used['可用资金'] = cash_str
         
+        # 处理"当前价格"变量（简化版，仅显示价格）
+        if '当前价格' in message:
+            price_data = stock_service.get_realtime_price(stock_code)
+            if price_data and price_data.get('price'):
+                price_str = f"当前价格: {price_data['price']:.2f} 元"
+                if price_data.get('trade_date'):
+                    price_str += f" (交易日: {price_data['trade_date']})"
+                if price_data.get('updated_at'):
+                    try:
+                        update_time = datetime.strptime(price_data['updated_at'], '%Y-%m-%d %H:%M:%S')
+                        price_str += f"\n更新时间: {update_time.strftime('%Y年%m月%d日 %H:%M:%S')}"
+                    except:
+                        price_str += f"\n更新时间: {price_data['updated_at']}"
+            else:
+                price_str = f"股票 {stock_code} 暂无当前价格数据"
+            
+            replaced_message = replaced_message.replace('当前价格', f'\n"""\n{price_str}\n"""')
+            variables_used['当前价格'] = price_str
+        
+        # 处理"实时行情"变量（完整版，包括价格+估值+成交）
+        if '实时行情' in message:
+            price_data = stock_service.get_realtime_price(stock_code)
+            realtime_str = self._format_realtime_price_data(stock_code, price_data)
+            replaced_message = replaced_message.replace('实时行情', f'\n"""\n{realtime_str}\n"""')
+            variables_used['实时行情'] = realtime_str
+        
         return replaced_message, variables_used
     
-    def _save_prompt_history(self, username, stock_code, user_message, ai_response, replaced_message):
+    def _save_prompt_history(self, username, stock_code, user_message, ai_response, replaced_message, images=None):
         """保存Prompt历史到文件"""
         try:
             # 获取或创建用户目录
@@ -522,11 +740,16 @@ class AIService:
             # 构建内容
             timestamp = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
             
+            # 图片信息
+            image_info = ''
+            if images and len(images) > 0:
+                image_info = f"\n\n**图片数量**: {len(images)} 张"
+            
             content = f"""# 对话历史 - {stock_code}
 
 **时间**: {timestamp}
 **历史索引**: {index}
-**用户**: {username}
+**用户**: {username}{image_info}
 
 ---
 
@@ -567,21 +790,43 @@ class AIService:
             traceback.print_exc()
             return None
     
-    def chat_with_history(self, user_id, username, stock_code, user_message):
-        """带历史记录的对话（支持变量替换和Prompt日志）"""
+    def chat_with_history(self, user_id, username, stock_code, user_message, model=None, images=None):
+        """带历史记录的对话（支持变量替换、图片和Prompt日志）
+        
+        Args:
+            user_id: 用户ID
+            username: 用户名
+            stock_code: 股票代码
+            user_message: 用户消息文本
+            model: 模型ID，如果为None则使用默认模型
+            images: 图片列表（base64格式），可选
+        """
+        # 0. 检查模型是否支持图片输入（仅警告，不阻止）
+        if images and len(images) > 0:
+            if not model:
+                model = self.default_model
+            
+            if not self.check_model_supports_vision(model):
+                warning_msg = f"⚠️ 警告：模型 {model} 可能不支持图片输入，如果API返回错误，请切换到支持Vision的模型"
+                print(warning_msg)
+                # 不返回错误，让API调用来决定是否成功
+        
         # 1. 替换变量
         replaced_message, variables_used = self._replace_variables(user_id, stock_code, user_message)
         
         print(f"\n📝 用户输入: {user_message}")
         if variables_used:
             print(f"🔄 变量替换: {list(variables_used.keys())}")
+        if images:
+            print(f"🖼️ 图片数量: {len(images)}")
         
         # 2. 获取历史记录
         history = self.get_chat_history(user_id, stock_code, limit=10)
         
         # 3. 构建消息列表
         messages = [
-            {'role': 'system', 'content': '你是一位专业的股票分析助手，请基于历史对话和用户问题提供分析建议。'}
+            #{'role': 'system', 'content': '你是一位专业的股票分析助手，可以分析图片中的股票走势、财报数据等信息。请基于历史对话和用户问题提供分析建议。'}
+            {'role': 'system', 'content': ''}
         ]
         
         for h in history:
@@ -590,21 +835,65 @@ class AIService:
                 'content': h['content']
             })
         
-        # 使用替换后的消息
-        messages.append({
-            'role': 'user',
-            'content': replaced_message
-        })
+        # 4. 构建用户消息（支持vision格式）
+        if images and len(images) > 0:
+            # Vision格式：包含文本和图片
+            content = []
+            
+            # 添加文本（如果有）
+            if replaced_message:
+                content.append({
+                    'type': 'text',
+                    'text': replaced_message
+                })
+            
+            # 添加图片
+            for img_base64 in images:
+                # 确保base64格式正确（data:image/xxx;base64,xxx）
+                if not img_base64.startswith('data:image'):
+                    print(f"⚠️ 图片格式错误，应该以 'data:image' 开头")
+                    continue
+                
+                content.append({
+                    'type': 'image_url',
+                    'image_url': {
+                        'url': img_base64  # OpenRouter支持data:image格式的base64
+                    }
+                })
+            
+            messages.append({
+                'role': 'user',
+                'content': content
+            })
+        else:
+            # 纯文本格式
+            messages.append({
+                'role': 'user',
+                'content': replaced_message
+            })
         
-        # 4. 调用AI
-        response = self.chat(messages)
+        # 5. 调用AI
+        response = self.chat(messages, model=model)
         
-        # 5. 保存对话记录到数据库（保存原始消息）
-        self.save_chat_history(user_id, stock_code, 'user', user_message)
+        # 6. 保存对话记录到数据库（保存原始消息和图片信息）
+        # 构建完整的用户消息（包含文本和图片标记）
+        if images and len(images) > 0:
+            import json
+            # 将图片和文本一起保存为JSON格式
+            save_content = json.dumps({
+                'text': user_message,
+                'images': images  # 保存完整的base64图片数据
+            }, ensure_ascii=False)
+            self.save_chat_history(user_id, stock_code, 'user', save_content)
+        else:
+            # 纯文本消息
+            self.save_chat_history(user_id, stock_code, 'user', user_message)
+        
         self.save_chat_history(user_id, stock_code, 'assistant', response)
         
-        # 6. 保存Prompt历史到文件（保存替换后的完整内容）
-        self._save_prompt_history(username, stock_code, user_message, response, replaced_message)
+        # 7. 保存Prompt历史到文件（保存替换后的完整内容和图片信息）
+        save_text = user_message if user_message else f"[发送了{len(images)}张图片]"
+        self._save_prompt_history(username, stock_code, save_text, response, replaced_message, images=images)
         
         return response
 

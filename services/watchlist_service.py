@@ -14,6 +14,21 @@ class WatchlistService:
         query = "SELECT * FROM watchlist WHERE user_id = %s ORDER BY created_at DESC"
         return db_manager.execute_query(query, (user_id,))
     
+    def get_all_unique_stocks(self):
+        """获取所有用户的自选股（去重）
+        
+        用于定时任务批量更新，返回不重复的股票代码列表
+        
+        Returns:
+            list: [{'stock_code': 'xxx', 'stock_name': 'xxx'}, ...]
+        """
+        query = """
+        SELECT DISTINCT stock_code, stock_name 
+        FROM watchlist 
+        ORDER BY stock_code
+        """
+        return db_manager.execute_query(query)
+    
     def add_to_watchlist(self, user_id, stock_code, stock_name=None):
         """添加到自选股
         

@@ -232,6 +232,39 @@ class DatabaseManager:
             ON stock_indicators(ts_code)
             """)
             
+            # 实时股价表（扩展版）
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS stock_realtime (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_code TEXT NOT NULL UNIQUE,
+                stock_name TEXT,
+                price REAL,
+                open REAL,
+                pre_close REAL,
+                high REAL,
+                low REAL,
+                volume REAL,
+                amount REAL,
+                change REAL,
+                change_percent REAL,
+                turnover_ratio REAL,
+                amplitude REAL,
+                total_mv REAL,
+                circ_mv REAL,
+                pe REAL,
+                pe_ttm REAL,
+                pb REAL,
+                dv_ratio REAL,
+                trade_date TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_stock_realtime_ts_code 
+            ON stock_realtime(ts_code)
+            """)
+            
             # 持仓数据表（添加user_id）
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS positions (
@@ -402,6 +435,44 @@ class DatabaseManager:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+            """)
+            
+            # AI模型配置表
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_models (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model_id TEXT NOT NULL UNIQUE,
+                model_name TEXT NOT NULL,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                display_order INTEGER NOT NULL DEFAULT 0,
+                supports_vision INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ai_models_enabled 
+            ON ai_models(is_enabled)
+            """)
+            
+            # 检查并添加 supports_vision 字段（兼容旧数据库）
+            cursor.execute("PRAGMA table_info(ai_models)")
+            columns = [col['name'] for col in cursor.fetchall()]
+            
+            if 'supports_vision' not in columns:
+                print("  - ai_models表缺少supports_vision字段，正在添加...")
+                cursor.execute("""
+                ALTER TABLE ai_models ADD COLUMN supports_vision INTEGER NOT NULL DEFAULT 0
+                """)
+                print("  - ai_models表supports_vision字段添加完成")
+            
+            # 初始化默认模型
+            cursor.execute("""
+            INSERT OR IGNORE INTO ai_models (model_id, model_name, is_enabled, display_order) 
+            VALUES 
+                ('deepseek/deepseek-chat', 'DeepSeek Chat', 1, 1),
+                ('anthropic/claude-opus-4-20250514', 'Claude Opus 4', 1, 2)
             """)
             
             conn.commit()
